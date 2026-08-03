@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>UI 参考稿 · 三版对比</title>
+<style>
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f4f6fb;color:#0f172a;margin:0;padding:48px 24px}
+h1{font-size:22px;text-align:center;margin:0 0 6px}
+p.sub{text-align:center;color:#5b6b83;font-size:13px;margin:0 0 32px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;max-width:1400px;margin:0 auto}
+@media (max-width:1100px){.grid{grid-template-columns:repeat(2,1fr)}}
+a.card{display:block;background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:24px;text-decoration:none;color:inherit;transition:all .18s;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+a.card:hover{transform:translateY(-4px);box-shadow:0 16px 40px -16px rgba(16,24,40,.25)}
+.swatch{height:64px;border-radius:12px;margin-bottom:16px;display:flex;align-items:flex-end;padding:10px;gap:6px}
+.swatch i{display:block;height:10px;border-radius:5px;opacity:.9}
+h2{font-size:16px;margin:0 0 6px}
+p{font-size:12.5px;color:#5b6b83;margin:0;line-height:1.6}
+.tag{display:inline-block;font-size:11px;background:#eef1f7;border-radius:999px;padding:2px 10px;margin-top:12px;color:#5b6b83}
+</style>
+</head>
+<body>
+<h1>定价工具 UI 参考稿（深色侧边栏 SaaS 风 × Apple 质感）</h1>
+<p class="sub">点击任一卡片打开完整页面查看 · 三版仅视觉风格不同，功能与数据完全一致</p>
+<div class="grid">
+  <a class="card" href="./variant-a.html">
+    <div class="swatch" style="background:linear-gradient(135deg,#0a1c40,#12295c)"><i style="width:60px;background:#2f6bff"></i><i style="width:34px;background:#4d8dff"></i><i style="width:22px;background:#f59e0b"></i></div>
+    <h2>A · 经典蓝</h2>
+    <p>深藏青侧边栏 + 亮蓝主色。最通用的企业 SaaS 气质，稳重专业，与"电力交易"场景契合度最高。</p>
+    <span class="tag">展示页：三档报价</span>
+  </a>
+  <a class="card" href="./variant-b.html">
+    <div class="swatch" style="background:linear-gradient(135deg,#03211d,#0a3f37)"><i style="width:60px;background:#0e9f76"></i><i style="width:34px;background:#34d399"></i><i style="width:22px;background:#f59e0b"></i></div>
+    <h2>B · 能源青</h2>
+    <p>墨绿侧边栏 + 青翠主色。能源/双碳行业感强，气质清爽，推荐卡用绿色描边呼应"清洁能源"。</p>
+    <span class="tag">展示页：曲线解释</span>
+  </a>
+  <a class="card" href="./variant-c.html">
+    <div class="swatch" style="background:linear-gradient(135deg,#0e0f13,#1b1e26)"><i style="width:60px;background:#d9962c"></i><i style="width:34px;background:#f0b43c"></i><i style="width:22px;background:#8b90a0"></i></div>
+    <h2>C · 商务金</h2>
+    <p>近黑侧边栏 + 琥珀金点缀。金融交易终端般的稳重感，暖灰底护眼，适合长时间盯盘的业务场景。</p>
+    <span class="tag">展示页：报价输入与校验</span>
+  </a>
+  <a class="card" href="./variant-d.html" style="background:#0b0d12;border-color:#232a3a">
+    <div class="swatch" style="background:linear-gradient(135deg,#07080c,#151924)"><i style="width:60px;background:#0a84ff"></i><i style="width:34px;background:#3f9bff"></i><i style="width:22px;background:#ff9f0a"></i></div>
+    <h2 style="color:#e9ecf3">D · 暗色深邃</h2>
+    <p style="color:#98a0b3">整体暗色：Apple 深色模式语言，抬升式表面 + 深色系统色，推荐卡琥珀渐变发光，长时间使用最护眼。</p>
+    <span class="tag" style="background:#1b2130;color:#98a0b3">展示页：三档报价</span>
+  </a>
+</div>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>广东单客户固定价零售定价工具 V1.3</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="#fff"/></svg></div>
+    <div><b>售电定价工具</b><small>单客户固定价 V1.3</small></div>
+  </div>
+  <nav class="nav" id="tabs">
+    <button class="nav-item tab active" data-tab="input"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>报价输入与校验</button>
+    <button class="nav-item tab" data-tab="quote" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 10h18"/></svg>三档报价</button>
+    <button class="nav-item tab" data-tab="analysis" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>加权分析</button>
+    <button class="nav-item tab" data-tab="curves" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-6 4 3 6-8 3 4"/></svg>曲线解释</button>
+    <button class="nav-item tab" data-tab="export" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>导出与留痕</button>
+    <button class="nav-item tab" data-tab="params"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 01-.1 1.2l2 1.6-2 3.4-2.4-1a7 7 0 01-2 1.2L14 21h-4l-.5-2.6a7 7 0 01-2-1.2l-2.4 1-2-3.4 2-1.6A7 7 0 015 12a7 7 0 01.1-1.2l-2-1.6 2-3.4 2.4 1a7 7 0 012-1.2L10 3h4l.5 2.6a7 7 0 012 1.2l2.4-1 2 3.4-2 1.6a7 7 0 01.1 1.2z"/></svg>参数管理</button>
+  </nav>
+  <div class="sb-foot" id="sbVersion"><b>—</b><br>参数版本加载中…</div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div>
+      <h1 id="pageTitle">报价输入与校验</h1>
+      <div class="crumb" id="pageCrumb">导入或粘贴客户 8760 曲线 · 校验通过后方可测算</div>
+    </div>
+    <div class="chips">
+      <span class="chip ver" id="activeVersionBadge" title="当前使用的系统参数版本">参数版本：—</span>
+      <span class="chip warn" title="所有价格情景、结算系数均为可配置假设">模型测算价，不替代正式结算单</span>
+    </div>
+  </div>
+
+<!-- ============ A+B 报价输入与数据校验 ============ -->
+<section id="tab-input" class="tab-panel active">
+  <div class="grid-2">
+    <div class="card">
+      <h2><span class="step">A</span>报价输入</h2>
+      <div class="form-row">
+        <label>客户名称（可选）</label>
+        <input type="text" id="inpCustomer" placeholder="仅用于报告标题">
+      </div>
+      <div class="form-row">
+        <label>系统参数版本</label>
+        <div class="inline">
+          <select id="selVersion"></select>
+          <button class="btn btn-ghost" id="btnGotoParams">管理</button>
+        </div>
+        <div class="hint" id="versionMetaHint"></div>
+      </div>
+      <div class="form-row">
+        <label>年度批发均价 W <span class="req">*</span>（元/MWh，日前价格锚点）</label>
+        <input type="number" id="inpW" min="0.01" step="0.01" placeholder="手工输入，必须大于 0，如 372">
+        <div class="hint">日前统一结算点价格的年度锚点，保存入本次报价快照</div>
+      </div>
+      <div class="form-row">
+        <label>中长期年度均价 W_LT（元/MWh，可空）</label>
+        <input type="number" id="inpWLt" min="0.01" step="0.01" placeholder="留空则取 W；中长期合同分时价锚点">
+        <div class="hint">标准代理配置 QLT=r×Q×g<sub>t</sub> 的中长期合同价锚点（平坦分时），非真实合同匹配</div>
+      </div>
+      <div class="form-row">
+        <label>年度中长期覆盖比例 r <span class="req">*</span>（%）</label>
+        <input type="number" id="inpR" min="0" max="100" step="0.1">
+        <div class="hint">风险暴露/结算假设，范围 0%–100%；默认值来自系统参数，可修改</div>
+      </div>
+      <div class="form-row">
+        <label>合同价口径 <span class="req">*</span></label>
+        <span class="useg" id="segContract">
+          <label class="radio"><input type="radio" name="contractMode" value="pv" checked><span>峰平谷系数结算（默认）</span></label>
+          <label class="radio"><input type="radio" name="contractMode" value="flat"><span>全时段同价</span></label>
+        </span>
+        <div class="hint">仅当合同模板允许且结算模式明确为「全时段同价」时才可选择后者</div>
+      </div>
+      <div class="uc-title">用户分类（V1.1，决定峰谷系数与规则匹配）</div>
+      <div class="uc-grid">
+        <div><label>供电营业区 <span class="req">*</span></label>
+          <select id="ucArea">
+            <option value="gd">广东（非深圳）</option>
+            <option value="sz">深圳供电局区域</option>
+            <option value="sz_inc">深圳增量配电网</option>
+          </select></div>
+        <div><label>原峰谷政策状态 <span class="req">*</span></label>
+          <select id="ucPv">
+            <option value="yes">原执行峰谷分时电价</option>
+            <option value="no">原不执行峰谷价格政策</option>
+            <option value="unknown">待核验</option>
+          </select></div>
+        <div><label>低压用户标识</label>
+          <select id="ucLv"><option value="no">否</option><option value="yes">是（深圳低压单列）</option></select></div>
+        <div><label>蓄冷用户认定</label>
+          <select id="ucIce"><option value="no">否</option><option value="yes">是（档案/供电口径认定）</option><option value="unknown">待核验</option></select></div>
+        <div><label>电压等级</label>
+          <select id="ucVoltage">
+            <option value="10kV">10kV</option>
+            <option value="&lt;1kV">1kV 以下（低压）</option>
+            <option value="20kV">20kV</option>
+            <option value="35kV">35kV</option>
+            <option value="110kV">110kV</option>
+            <option value="220kV及以上">220kV 及以上</option>
+          </select></div>
+        <div><label>供电计量方式</label>
+          <select id="ucMetering">
+            <option value="高供高计">高供高计</option>
+            <option value="高供低计">高供低计</option>
+            <option value="低供低计">低供低计</option>
+          </select></div>
+        <div><label>用电类别</label>
+          <select id="ucCategory">
+            <option value="普通工商业及其他">普通工商业及其他</option>
+            <option value="大量工商业及其他（101–3000kVA）">大量工商业及其他（101–3000kVA）</option>
+            <option value="高需求工商业及其他（≥3001kVA）">高需求工商业及其他（≥3001kVA）</option>
+          </select></div>
+        <div><label>容量（kVA，可选）</label>
+          <input type="number" id="ucCapacity" min="0" step="1" placeholder="用于类别一致性校验"></div>
+      </div>
+      <div id="ucMatch"></div>
+      <div class="form-row">
+        <label>客户 8760 用电曲线 <span class="req">*</span></label>
+        <textarea id="txtCurve" rows="9" placeholder="粘贴三列：日期、时刻(0–23)、用电量。支持从 Excel 直接粘贴；首行表头可有可无。&#10;示例：&#10;2026-01-01	0	1234.5&#10;2026-01-01	1	1180.2"></textarea>
+        <div class="inline gap">
+          <input type="file" id="fileCurve" accept=".csv,.txt,.tsv,.xlsx,.xls" class="file-input">
+          <button class="btn btn-ghost" id="btnTemplate">下载 CSV 模板</button>
+          <button class="btn btn-ghost" id="btnDemo">生成演示曲线</button>
+        </div>
+        <div class="hint">支持 CSV/TXT 或直接上传 <b>.xlsx</b> 工作簿（自动识别日期/时刻/用电量列；解析后倒入上方文本框，仍需通过 8760 校验）</div>
+      </div>
+      <div class="form-row">
+        <label>用电量单位 <span class="req">*</span></label>
+        <div class="inline">
+          <span class="useg">
+            <label class="radio"><input type="radio" name="unit" value="kWh"><span>kWh</span></label>
+            <label class="radio"><input type="radio" name="unit" value="MWh"><span>MWh</span></label>
+          </span>
+          <span class="hint" id="unitGuess"></span>
+        </div>
+        <label class="checkbox"><input type="checkbox" id="chkUnitConfirm"> 我已确认单位选择正确（计算内部统一换算为 MWh）</label>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnValidate">① 校验曲线</button>
+        <button class="btn btn-primary" id="btnCompute" disabled>② 开始测算</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">B</span>数据校验</h2>
+      <div id="validateEmpty" class="empty">粘贴或导入曲线后点击「校验曲线」。校验规则：报价年度 8760 点完整、日期+小时唯一、用电量非负；校验失败将阻止报价，不会悄悄补数。</div>
+      <div id="validateResult" class="hidden">
+        <div id="validateStatus"></div>
+        <div id="validateStats"></div>
+        <div id="validateAnomalies"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ C 三档报价卡 ============ -->
+<section id="tab-quote" class="tab-panel">
+  <div id="quoteEmpty" class="empty">完成输入校验并点击「开始测算」后，此处展示三档报价。</div>
+  <div id="quoteResult" class="hidden">
+    <div id="redlineBanner"></div>
+    <div class="tier-cards" id="tierCards"></div>
+    <div class="hint center">三张报价卡并列展示：点击哪张，哪张加蓝框并展开完整构成（同时只展开一张）；再点一次或点 × 收起。总利润 = 签约价 − 全口径成本，正数=利润，负数=亏损。</div>
+  </div>
+</section>
+
+<!-- ============ D 加权分析 ============ -->
+<section id="tab-analysis" class="tab-panel">
+  <div id="analysisEmpty" class="empty">测算完成后展示。</div>
+  <div id="analysisResult" class="hidden">
+    <div class="card">
+      <h2>加权分析总览</h2>
+      <div id="analysisSummary" class="summary-chips"></div>
+      <div class="table-wrap"><table class="tbl" id="tblScenarios"></table></div>
+      <div class="hint">符号约定：正数=成本，负数=收益/曲线优势。价格情景曲线已按 W_s 标定（保留时段形状，统调基准加权均价=W_s），避免年度均价与曲线价值重复计算。</div>
+    </div>
+    <div class="card">
+      <h2>分位数与档位构成</h2>
+      <div class="table-wrap"><table class="tbl" id="tblQuantiles"></table></div>
+    </div>
+    <div class="card" id="pvRiskCard" style="display:none">
+      <h2>峰谷平衡风险（单列，不计入三档价）</h2>
+      <div id="pvRiskBody"></div>
+    </div>
+    <div class="card" id="billCard" style="display:none">
+      <h2>预计到户账单（单列，非售电公司电能量收入）</h2>
+      <div id="billBody"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ E 曲线解释 ============ -->
+<section id="tab-curves" class="tab-panel">
+  <div id="curvesEmpty" class="empty">测算完成后展示。</div>
+  <div id="curvesResult" class="hidden">
+    <div class="card">
+      <h2>曲线价值解读</h2>
+      <div id="cvExplanation" class="explain"></div>
+    </div>
+    <div class="card">
+      <h2>客户曲线 vs 统调基准（全年逐日电量）</h2>
+      <div class="hint">等电量基准 b<sub>t</sub> = Q × g<sub>t</sub>，与客户同总量，仅作比较基准，<b>不是</b>采购分配曲线。</div>
+      <div id="chartDaily" class="chart"></div>
+    </div>
+    <div class="card">
+      <h2>典型日曲线对比（按月）</h2>
+      <div class="inline"><label class="hint" style="margin:0">月份</label><select id="selMonth" style="width:120px"></select></div>
+      <div id="chartTypical" class="chart"></div>
+    </div>
+    <div class="card">
+      <h2>曲线价值月度贡献（情景加权，元/MWh）</h2>
+      <div class="hint">红色为正贡献（该月曲线推高成本），绿色为负贡献（曲线优势）。</div>
+      <div id="chartMonthlyCV" class="chart"></div>
+    </div>
+    <div class="card">
+      <h2>曲线价值贡献最大的时段（Top 10）</h2>
+      <div class="table-wrap"><table class="tbl" id="tblTopHours"></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ F 导出与留痕 ============ -->
+<section id="tab-export" class="tab-panel">
+  <div class="card">
+    <h2>导出本次报价</h2>
+    <div id="exportEmpty" class="empty">测算完成后可导出。</div>
+    <div id="exportActions" class="hidden actions" style="margin-top:0">
+      <button class="btn btn-primary" id="btnExportJSON">导出报价快照（JSON）</button>
+      <button class="btn" id="btnExportReport">生成报价说明（打印/PDF）</button>
+    </div>
+    <div class="hint">快照包含：输入、参数版本、计算时间、全部中间结果与风险提示；报价说明含「模型测算价，不替代正式结算单」声明。</div>
+  </div>
+  <div class="card">
+    <h2>历史报价快照（本机留痕）</h2>
+    <div class="table-wrap"><table class="tbl" id="tblSnapshots"></table></div>
+  </div>
+</section>
+
+<!-- ============ 参数管理 ============ -->
+<section id="tab-params" class="tab-panel">
+  <div class="card">
+    <h2>参数版本</h2>
+    <div class="table-wrap"><table class="tbl" id="tblVersions"></table></div>
+    <div class="hint">所有与广东市场规则、结算系数、价格情景有关的内容均为可配置、可追溯、可更新的参数，不代表市场真值。编辑后保存为新版本，历史版本保留。</div>
+  </div>
+  <div class="card">
+    <h2>编辑当前参数（另存为新版本后生效）</h2>
+    <div id="paramEditor"></div>
+  </div>
+</section>
+
+<footer class="footer">V1.3｜仅支持固定综合单价（峰平谷系数结算）、单客户独立定价｜统调曲线仅作比较基准｜全部计算在本机浏览器完成，数据不出本机</footer>
+</main>
+
+<script src="js/data.js"></script>
+<script src="js/vendor/xlsx.full.min.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/xlsx-import.js"></script>
+<script src="js/store.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

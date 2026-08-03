@@ -1,0 +1,6 @@
+.DS_Store
+Thumbs.db
+
+# Local browser/export artifacts: do not publish customer quotations or snapshots.
+exports/
+*.local.json

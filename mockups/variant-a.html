@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考稿 A · 经典蓝</title>
+<style>
+:root{
+  --sb-bg1:#0a1c40; --sb-bg2:#12295c; --sb-text:#8ea3c8; --sb-active:rgba(88,141,255,.18);
+  --accent:#2f6bff; --accent-soft:#e8efff; --bg:#f4f6fb; --card:#fff;
+  --ink:#0f172a; --ink2:#5b6b83; --line:#e6eaf2;
+  --amber:#f59e0b; --amber-soft:#fef3e2; --green:#0da271; --green-soft:#e5f7f0; --red:#e5484d;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);display:flex;min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}
+/* ---------- 侧边栏 ---------- */
+.sidebar{width:236px;background:linear-gradient(180deg,var(--sb-bg1),var(--sb-bg2));color:#fff;padding:22px 14px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.logo{display:flex;align-items:center;gap:10px;padding:0 10px 20px;border-bottom:1px solid rgba(255,255,255,.09);margin-bottom:16px}
+.logo-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#4d8dff,#2f6bff);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(47,107,255,.45)}
+.logo b{font-size:15px;letter-spacing:.02em}
+.logo small{display:block;font-size:10.5px;color:var(--sb-text);font-weight:400;margin-top:1px}
+.nav{flex:1;display:flex;flex-direction:column;gap:3px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;color:var(--sb-text);font-size:13.5px;cursor:pointer;transition:all .15s;text-decoration:none}
+.nav-item svg{opacity:.85}
+.nav-item:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav-item.active{color:#fff;background:var(--sb-active);font-weight:600;box-shadow:inset 0 0 0 1px rgba(120,160,255,.25)}
+.sb-foot{margin-top:auto;padding:12px;background:rgba(255,255,255,.06);border-radius:12px;font-size:11px;color:var(--sb-text);line-height:1.5}
+.sb-foot b{color:#dbe6ff;font-size:11.5px}
+/* ---------- 主区 ---------- */
+.main{flex:1;padding:0 32px 40px;min-width:0}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:20px 0 18px;position:sticky;top:0;background:rgba(244,246,251,.85);backdrop-filter:blur(12px);z-index:5}
+.topbar h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.topbar .crumb{font-size:12px;color:var(--ink2);margin-top:2px}
+.chips{display:flex;gap:8px}
+.chip{font-size:12px;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink2)}
+.chip.ver{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
+.chip.warn{background:var(--amber-soft);color:#92600a;border-color:transparent}
+/* ---------- 报价卡 ---------- */
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:6px}
+.tier{background:var(--card);border-radius:18px;padding:22px 22px 18px;box-shadow:0 1px 2px rgba(16,24,40,.05),0 12px 32px -16px rgba(16,24,40,.14);border:1px solid rgba(230,234,242,.9);transition:transform .18s,box-shadow .18s;position:relative;cursor:pointer}
+.tier:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(16,24,40,.06),0 20px 44px -16px rgba(16,24,40,.2)}
+.tier .name{font-size:13px;font-weight:600;color:var(--ink2);display:flex;align-items:center;gap:8px}
+.tier .price{font-size:42px;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin:10px 0 2px;color:var(--ink)}
+.tier .price small{font-size:13px;font-weight:500;color:var(--ink2);letter-spacing:0}
+.tier .conv{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.tier .kpis{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.pill{font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--green-soft);color:var(--green);font-weight:600;font-variant-numeric:tabular-nums}
+.pill.gray{background:#eef1f7;color:var(--ink2)}
+.tier .note{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);font-size:12px;color:var(--ink2)}
+.tier.rec{border:none;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#f5b544,#e8850c) border-box;border:1.5px solid transparent}
+.rec-badge{position:absolute;top:-11px;right:18px;background:linear-gradient(135deg,#f5b544,#e8850c);color:#fff;font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:999px;box-shadow:0 4px 10px rgba(232,133,12,.4)}
+.tier.rec .price{color:#c56a06}
+/* ---------- 公式条 ---------- */
+.formula{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.formula code{background:var(--accent-soft);color:var(--accent);padding:4px 10px;border-radius:8px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px;font-weight:600}
+.formula b{color:var(--ink)}
+/* ---------- 表格卡 ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-top:18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.card h2{font-size:15px;font-weight:700;margin-bottom:4px}
+.card .sub{font-size:12px;color:var(--ink2);margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);font-weight:600;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+td{padding:11px 12px;border-bottom:1px solid #f0f2f8}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#f8faff}
+.num{text-align:right}
+.pos{color:var(--red)} .negc{color:var(--green)} .profit{color:var(--green);font-weight:600}
+.ecl{background:#f6f9ff;font-weight:600}
+.btn{background:var(--accent);color:#fff;border:none;padding:9px 20px;border-radius:10px;font-size:13.5px;font-weight:600;box-shadow:0 4px 14px -4px rgba(47,107,255,.55);cursor:pointer}
+.btn.plain{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:none;font-weight:500}
+.actions{display:flex;gap:10px;margin-top:18px}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="#fff"/></svg></div>
+    <div><b>售电定价工具</b><small>单客户固定价 V1.0</small></div>
+  </div>
+  <nav class="nav">
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>报价输入与校验</a>
+    <a class="nav-item active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 10h18"/></svg>三档报价</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>加权分析</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-6 4 3 6-8 3 4"/></svg>曲线解释</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>导出与留痕</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 01-.1 1.2l2 1.6-2 3.4-2.4-1a7 7 0 01-2 1.2L14 21h-4l-.5-2.6a7 7 0 01-2-1.2l-2.4 1-2-3.4 2-1.6A7 7 0 015 12a7 7 0 01.1-1.2l-2-1.6 2-3.4 2.4 1a7 7 0 012-1.2L10 3h4l.5 2.6a7 7 0 012 1.2l2.4-1 2 3.4-2 1.6a7 7 0 01.1 1.2z"/></svg>参数管理</a>
+  </nav>
+  <div class="sb-foot"><b>sys-v2026.1（内置）</b><br>2026 初始参数版 · 生效 2026-01-01<br>3 情景等权 · CE=(1−r)×CV</div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div><h1>三档报价</h1><div class="crumb">冒烟测试工厂 · W=372 元/MWh · r=90% · Q=11,198.6 MWh · 2026-08-03 12:26 测算</div></div>
+    <div class="chips"><span class="chip ver">参数版本 sys-v2026.1</span><span class="chip warn">模型测算价，不替代正式结算单</span></div>
+  </div>
+
+  <div class="tiers">
+    <div class="tier">
+      <div class="name">保守价</div>
+      <div class="price">392.59 <small>元/MWh</small></div>
+      <div class="conv">0.3926 元/度 · 39.26 分/度</div>
+      <div class="kpis"><span class="pill">预期利润 +20.23</span><span class="pill gray">亏损权重 0%</span><span class="pill gray">最差 +20.00</span></div>
+      <div class="note">覆盖 95% 不利成本情景，确保至少 2 分/度贡献利润</div>
+    </div>
+    <div class="tier">
+      <div class="name">目标价</div>
+      <div class="price">382.59 <small>元/MWh</small></div>
+      <div class="conv">0.3826 元/度 · 38.26 分/度</div>
+      <div class="kpis"><span class="pill">预期利润 +10.23</span><span class="pill gray">亏损权重 0%</span><span class="pill gray">最差 +10.00</span></div>
+      <div class="note">覆盖 90% 不利情景，确保至少 1 分/度贡献利润</div>
+    </div>
+    <div class="tier rec">
+      <span class="rec-badge">★ 推荐</span>
+      <div class="name">冲单价</div>
+      <div class="price">377.36 <small>元/MWh</small></div>
+      <div class="conv">0.3774 元/度 · 37.74 分/度</div>
+      <div class="kpis"><span class="pill">预期利润 +5.00</span><span class="pill gray">亏损权重 0%</span><span class="pill gray">最差 +4.77</span></div>
+      <div class="note">主推：保持至少 0.5 分/度预期利润，以可见尾部风险换取成交竞争力</div>
+    </div>
+  </div>
+
+  <div class="formula">冲单价构成 <code>max(C80 + 3，E[C] + 5)</code> = max(375.59，377.36) = <b>377.36 元/MWh</b><span>· 由 E[C]+5 约束 · C80=372.59 · E[C]=372.36</span></div>
+
+  <div class="card">
+    <h2>加权分析</h2>
+    <div class="sub">单位：元/MWh · 正数=成本，负数=收益/曲线优势 · 利润=签约价−全口径成本</div>
+    <table>
+      <thead><tr><th>情景</th><th class="num">权重</th><th class="num">W_s</th><th class="num">CV_s</th><th class="num">CE_s</th><th class="num">SR_s</th><th class="num">O_s</th><th class="num">C_s</th><th class="num">冲单价利润</th></tr></thead>
+      <tbody>
+        <tr><td>预测价格 v1</td><td class="num">33.33%</td><td class="num">372.00</td><td class="num pos">+0.12</td><td class="num pos">+0.01</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">372.01</td><td class="num profit">+5.35</td></tr>
+        <tr><td>预测价格 v2</td><td class="num">33.33%</td><td class="num">372.00</td><td class="num pos">+4.75</td><td class="num pos">+0.48</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">372.48</td><td class="num profit">+4.88</td></tr>
+        <tr><td>预测价格 v3</td><td class="num">33.33%</td><td class="num">372.00</td><td class="num pos">+5.93</td><td class="num pos">+0.59</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">372.59</td><td class="num profit">+4.77</td></tr>
+        <tr class="ecl"><td>加权期望 E[C]</td><td class="num">100%</td><td></td><td class="num pos">+3.60</td><td colspan="2"></td><td></td><td class="num">372.36</td><td class="num profit">+5.00</td></tr>
+      </tbody>
+    </table>
+    <div class="actions"><button class="btn">生成报价说明</button><button class="btn plain">导出快照 JSON</button></div>
+  </div>
+</main>
+</body>
+</html>
