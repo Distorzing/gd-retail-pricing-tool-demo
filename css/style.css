@@ -322,6 +322,46 @@ input:disabled { opacity: .5; }
 .hour-strip .hv { background: rgba(48,209,88,.45); }
 .hour-strip .hs { background: var(--orange); color: #1a1206; font-weight: 700; }
 
+/* ================= 移动端适配（≤768px） ================= */
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  /* 侧边栏 → 顶部横条 */
+  .sidebar {
+    width: 100%; height: auto; position: static;
+    padding: 14px 14px 10px; border-right: none; border-bottom: 1px solid var(--line);
+  }
+  .logo { padding: 0 4px 12px; margin-bottom: 10px; }
+  .nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; width: auto; flex: none; }
+  .nav-item svg { display: none; }
+  .sb-foot { display: none; }
+  /* 主区收紧 */
+  .main { padding: 0 14px 32px; }
+  .topbar { padding: 14px 0 12px; }
+  .topbar h1 { font-size: 17px; }
+  .topbar .crumb { font-size: 11px; }
+  .chips { width: 100%; }
+  .chip { font-size: 11px; padding: 5px 10px; }
+  .card { padding: 16px; border-radius: 14px; margin-bottom: 14px; }
+  /* 单列堆叠 */
+  .uc-grid { grid-template-columns: 1fr; }
+  .tier-cards { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .tier-price { font-size: 34px; }
+  /* 统计与风险网格两列 */
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .risk-grid { grid-template-columns: repeat(2, 1fr); }
+  .actions .btn { flex: 1; text-align: center; }
+  .file-input { max-width: 100%; }
+  .summary-chips .schip { flex: 1 1 45%; }
+  .inline select { min-width: 0; }
+}
+@media (max-width: 420px) {
+  .risk-grid { grid-template-columns: 1fr; }
+  .tier-kpis .pill { font-size: 11px; padding: 3px 8px; }
+}
+
 /* ================= 无障碍（apple-design §14） ================= */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
