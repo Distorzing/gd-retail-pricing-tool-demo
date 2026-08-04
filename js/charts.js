@@ -60,20 +60,31 @@
     el('line', { x1: M.l, x2: M.l, y1: M.t, y2: H - M.b, stroke: 'rgba(255,255,255,.22)' }, svg);
 
     // 序列
-    series.forEach((s, si) => {
+    const hidden = series.map(() => false);
+    const paths = series.map((s, si) => {
       const color = s.color || COLORS[si % COLORS.length];
       let dAttr = '';
       s.values.forEach((v, i) => { if (isFinite(v)) dAttr += (dAttr ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); });
-      el('path', { d: dAttr, fill: 'none', stroke: color, 'stroke-width': 1.6 }, svg);
+      return el('path', { d: dAttr, fill: 'none', stroke: color, 'stroke-width': 1.6 }, svg);
     });
 
-    // 图例
+    // 图例（toggleable 时可点击切换显隐）
     let lx = M.l + 6;
     series.forEach((s, si) => {
       const color = s.color || COLORS[si % COLORS.length];
-      el('rect', { x: lx, y: 4, width: 14, height: 4, fill: color, rx: 2 }, svg);
-      const t = el('text', { x: lx + 18, y: 10, 'font-size': 11, fill: '#c6ccdb' }, svg);
+      const g = el('g', { style: opts.toggleable ? 'cursor:pointer' : '', 'class': 'legend-item' }, svg);
+      el('rect', { x: lx, y: 4, width: 14, height: 4, fill: color, rx: 2 }, g);
+      const t = el('text', { x: lx + 18, y: 10, 'font-size': 11, fill: '#c6ccdb' }, g);
       t.textContent = s.name;
+      // 点击热区
+      el('rect', { x: lx - 4, y: 0, width: 18 + s.name.length * 12 + 18, height: 16, fill: 'transparent' }, g);
+      if (opts.toggleable) {
+        g.addEventListener('click', () => {
+          hidden[si] = !hidden[si];
+          paths[si].setAttribute('display', hidden[si] ? 'none' : '');
+          g.setAttribute('opacity', hidden[si] ? '.35' : '1');
+        });
+      }
       lx += 18 + s.name.length * 12 + 26;
     });
     if (opts.yLabel) {
@@ -103,6 +114,7 @@
       cross.setAttribute('visibility', 'visible');
       let html = '<div class="tip-title">' + (opts.xValue ? opts.xValue(i) : ('#' + (i + 1))) + '</div>';
       series.forEach((s, si) => {
+        if (hidden[si]) { dots[si].setAttribute('visibility', 'hidden'); return; }
         const v = s.values[i];
         if (isFinite(v)) {
           dots[si].setAttribute('cx', cx); dots[si].setAttribute('cy', y(v));
@@ -112,7 +124,7 @@
         html += '<div class="tip-row"><span><i class="tip-dot" style="background:' + color + '"></i>' +
           s.name.replace(/\s*\(.*\)\s*$/, '') + '</span><b>' + niceNum(v, opts.diffDigits != null ? opts.diffDigits : 3) + '</b></div>';
       });
-      if (series.length >= 2 && isFinite(series[0].values[i]) && isFinite(series[1].values[i])) {
+      if (series.length >= 2 && !hidden[0] && !hidden[1] && isFinite(series[0].values[i]) && isFinite(series[1].values[i])) {
         const diff = series[0].values[i] - series[1].values[i];
         html += '<div class="tip-row tip-diff"><span>差值（客户−基准）</span><b class="' +
           (diff >= 0 ? 'tip-pos' : 'tip-neg') + '">' + fmtSigned(diff, opts.diffDigits != null ? opts.diffDigits : 3) + '</b></div>';

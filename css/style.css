@@ -322,6 +322,34 @@ input:disabled { opacity: .5; }
 .hour-strip .hv { background: rgba(48,209,88,.45); }
 .hour-strip .hs { background: var(--orange); color: #1a1206; font-weight: 700; }
 
+/* ================= 批发曲线管理抽屉（与主界面统一语言） ================= */
+.wc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 40; backdrop-filter: blur(3px); }
+.wc-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 96vw; z-index: 41;
+  background: var(--bg); border-left: 1px solid var(--line);
+  box-shadow: -18px 0 50px rgba(0,0,0,.55); display: flex; flex-direction: column;
+  animation: wcIn .24s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes wcIn { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+.wc-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding: 20px 22px 14px; border-bottom: 1px solid var(--line);
+  background: rgba(11,13,18,.72); backdrop-filter: blur(18px) saturate(160%);
+}
+.wc-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+.wc-sub { font-size: 11.5px; color: var(--ink2); margin-top: 3px; }
+.wc-body { padding: 16px 22px 28px; overflow-y: auto; flex: 1; }
+.wc-card { padding: 16px 18px; border-radius: 14px; margin-bottom: 14px; }
+.wc-card h2 { font-size: 14px; margin-bottom: 10px; }
+.wc-editor label { font-size: 12px; color: var(--ink2); display: block; margin-bottom: 4px; }
+.wc-entries { max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.wc-entries input { padding: 4px 8px; font-size: 12px; }
+.derived-box { background: #10141d; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.derived-box b { color: var(--ink); }
+@media (max-width: 768px) {
+  .wc-drawer { width: 100vw; max-width: 100vw; }
+}
+
 /* ================= 移动端适配（≤768px） ================= */
 @media (max-width: 768px) {
   body { flex-direction: column; }
@@ -370,3 +398,13 @@ input:disabled { opacity: .5; }
 @media (prefers-reduced-transparency: reduce) {
   .topbar { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; mask-image: none; -webkit-mask-image: none; border-bottom: 1px solid var(--line); }
 }
+
+/* 来源/说明折叠 */
+.src-fold summary {
+  cursor: pointer; color: var(--blue-text); font-size: 12px; font-weight: 600;
+  list-style: none; user-select: none;
+}
+.src-fold summary::before { content: '▸ '; }
+.src-fold[open] summary::before { content: '▾ '; }
+.src-fold summary::-webkit-details-marker { display: none; }
+.src-fold div { margin-top: 6px; font-size: 12px; color: var(--ink2); line-height: 1.6; }

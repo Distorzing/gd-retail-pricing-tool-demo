@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>广东单客户固定价零售定价工具 V1.3</title>
-<link rel="stylesheet" href="css/style.css">
+<title>广东单客户固定价零售定价工具 V1.4</title>
+<link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body>
 
 <aside class="sidebar">
   <div class="logo">
     <div class="logo-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="#fff"/></svg></div>
-    <div><b>售电定价工具</b><small>单客户固定价 V1.3</small></div>
+    <div><b>售电定价工具</b><small>单客户固定价 V1.4</small></div>
   </div>
   <nav class="nav" id="tabs">
     <button class="nav-item tab active" data-tab="input"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>报价输入与校验</button>
@@ -64,9 +64,9 @@
         <div class="hint">标准代理配置 QLT=r×Q×g<sub>t</sub> 的中长期合同价锚点（平坦分时），非真实合同匹配</div>
       </div>
       <div class="form-row">
-        <label>年度中长期覆盖比例 r <span class="req">*</span>（%）</label>
-        <input type="number" id="inpR" min="0" max="100" step="0.1">
-        <div class="hint">风险暴露/结算假设，范围 0%–100%；默认值来自系统参数，可修改</div>
+        <label>中长期覆盖率（V1.4 起由批发曲线自动汇总）</label>
+        <div class="derived-box" id="rDerived">—</div>
+        <div class="hint">在「参数管理 → 批发曲线管理」录入采购曲线；无曲线时使用系统默认基准假设（r<sub>0</sub> 可在参数管理修改）</div>
       </div>
       <div class="form-row">
         <label>合同价口径 <span class="req">*</span></label>
@@ -202,13 +202,20 @@
       <div id="cvExplanation" class="explain"></div>
     </div>
     <div class="card">
-      <h2>客户曲线 vs 统调基准（全年逐日电量）</h2>
-      <div class="hint">等电量基准 b<sub>t</sub> = Q × g<sub>t</sub>，与客户同总量，仅作比较基准，<b>不是</b>采购分配曲线。</div>
+      <h2>客户 / 统调基准 / 批发采购（全年逐日电量）</h2>
+      <div class="hint">点击图例可切换每条曲线的显示。等电量基准 b<sub>t</sub> = Q × g<sub>t</sub>，仅作比较基准；批发采购曲线来自批发曲线管理（无曲线时为默认年度基准假设）。</div>
       <div id="chartDaily" class="chart"></div>
     </div>
     <div class="card">
-      <h2>典型日曲线对比（按月）</h2>
-      <div class="inline"><label class="hint" style="margin:0">月份</label><select id="selMonth" style="width:120px"></select></div>
+      <h2>曲线对比（月均 / 单日）</h2>
+      <div class="inline">
+        <span class="useg">
+          <label class="radio"><input type="radio" name="dayView" value="month" checked><span>月均视图</span></label>
+          <label class="radio"><input type="radio" name="dayView" value="date"><span>单日视图</span></label>
+        </span>
+        <select id="selMonth" style="width:110px"></select>
+        <select id="selDate" style="width:160px" class="hidden"></select>
+      </div>
       <div id="chartTypical" class="chart"></div>
     </div>
     <div class="card">
@@ -243,7 +250,15 @@
 <!-- ============ 参数管理 ============ -->
 <section id="tab-params" class="tab-panel">
   <div class="card">
+    <h2>批发曲线管理</h2>
+    <div id="wcOverview" class="summary-chips"></div>
+    <div class="actions" style="margin-top:4px"><button class="btn btn-primary" id="btnOpenWc">打开批发曲线管理</button></div>
+    <div class="hint">录入多条采购曲线（年分月/月分日/日分时）；细粒度覆盖粗粒度、同粒度后录入覆盖；覆盖率由有效曲线自动汇总，未覆盖电量进入日前市场缺口。</div>
+  </div>
+  <div class="card">
     <h2>参数版本</h2>
+    <div class="actions" style="margin-top:0"><button class="btn" id="btnExportParams">导出当前参数 JSON（可作默认数据）</button></div>
+    <div class="hint">导出当前生效参数（含批发曲线等全部配置）为 JSON；将该文件替换 data/ 下的默认参数即可把当前设定固化为默认数据。</div>
     <div class="table-wrap"><table class="tbl" id="tblVersions"></table></div>
     <div class="hint">所有与广东市场规则、结算系数、价格情景有关的内容均为可配置、可追溯、可更新的参数，不代表市场真值。编辑后保存为新版本，历史版本保留。</div>
   </div>
@@ -253,17 +268,22 @@
   </div>
 </section>
 
-<footer class="footer">V1.3｜仅支持固定综合单价（峰平谷系数结算）、单客户独立定价｜统调曲线仅作比较基准｜全部计算在本机浏览器完成，数据不出本机</footer>
+<footer class="footer">V1.4｜仅支持固定综合单价（峰平谷系数结算）、单客户独立定价｜中长期+日前两部制口径｜全部计算在本机浏览器完成，数据不出本机</footer>
 </main>
 
-<script src="js/data.js"></script>
-<script src="js/vendor/xlsx.full.min.js"></script>
-<script src="js/calc.js"></script>
-<script src="js/validate.js"></script>
-<script src="js/xlsx-import.js"></script>
-<script src="js/store.js"></script>
-<script src="js/charts.js"></script>
-<script src="js/export.js"></script>
-<script src="js/app.js"></script>
+<div class="wc-overlay hidden" id="wcOverlay"></div>
+<aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
+
+<script src="js/data.js?v=18"></script>
+<script src="js/vendor/xlsx.full.min.js?v=18"></script>
+<script src="js/calc.js?v=18"></script>
+<script src="js/validate.js?v=18"></script>
+<script src="js/xlsx-import.js?v=18"></script>
+<script src="js/store.js?v=18"></script>
+<script src="js/charts.js?v=18"></script>
+<script src="js/export.js?v=18"></script>
+<script src="js/wc-template.js?v=18"></script>
+<script src="js/wholesale.js?v=18"></script>
+<script src="js/app.js?v=18"></script>
 </body>
 </html>

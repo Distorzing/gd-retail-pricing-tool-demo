@@ -95,8 +95,8 @@
     const r = result;
     const pvActive = pv && pv.active;
     const cm = (ctx.params && ctx.params.costModel) || {};
-    const bill = (ctx.params && ctx.params.billLayer) || [];
-    const passSum = bill.filter(b => b.bearer === 'pass').reduce((a, b) => a + Number(b.perMwh || 0), 0);
+    const bill = ctx.bill || null;
+    const billAdd = bill && bill.item.bearer === 'pass' ? bill.annual : 0;
     const priceHead = pvActive
       ? '<th>峰价<br>元/MWh</th><th>平价<br>元/MWh</th><th>谷价<br>元/MWh</th><th>等效平均价<br>元/MWh</th><th>元/度</th><th>分/度</th>'
       : '<th colspan="3">峰/平/谷</th><th>元/MWh</th><th>元/度</th><th>分/度</th>';
@@ -123,7 +123,9 @@
       '<tr><td>报价年度 / 曲线点数</td><td>' + paramMeta.year + ' 年 / ' + validation.count + ' 点（8760 校验通过）</td></tr>' +
       '<tr><td>客户全年电量 Q</td><td>' + r.Q.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) + ' MWh</td></tr>' +
       '<tr><td>日前价格锚点 W / 中长期均价 W_LT</td><td>' + f2(inputs.W) + ' / ' + f2(r.wLt) + ' 元/MWh</td></tr>' +
-      '<tr><td>中长期覆盖比例 r（人工采购策略）</td><td>' + (r.coverageRatio * 100).toFixed(1) + '%（标准代理配置 QLT=r×Q×g_t，非真实合同匹配）</td></tr>' +
+      '<tr><td>中长期覆盖率（批发曲线自动汇总）</td><td>' + (r.procurement.coverage * 100).toFixed(1) + '%' +
+      (r.procurement.isDefault ? '（默认年度基准假设）' : '（' + r.procurement.curveCount + ' 条批发曲线）') +
+      '；加权采购均价 ' + f2(r.procurement.weightedPrice) + ' 元/MWh；日前市场缺口 ' + r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh</td></tr>' +
       '<tr><td>结构风险准备金（估算）</td><td>' + f2(r.reserve) + ' 元/MWh · ' + ((cm.reserveApproval && cm.reserveApproval.ok) ? '已审批（' + escH(cm.reserveApproval.by) + '）' : '未审批') + '</td></tr>' +
       ucRows(ctx.uc) + '</table>' +
 
@@ -133,16 +135,16 @@
       '<div class="meta">定价公式（V1.2）：P平,k = [Quantile(C总,qk) + Mk] / K；P峰=f1×P平，P谷=f2×P平，等效平均签约价=P平×K。' +
       'C总 = C批发 + C结算 + C信用服务 + 结构风险准备金（估算）；C批发按中长期/日前/实时三部制分解。</div>' +
 
-      '<h2>三、三部制成本拆分（单位：元/MWh）</h2><table>' +
-      '<tr><th>情景</th><th>权重</th><th>W_da</th><th>实时<br>因子</th><th>中长期<br>Clt</th><th>日前<br>Cda</th><th>实时<br>Crt</th>' +
+      '<h2>三、两部制成本拆分（中长期+日前，单位：元/MWh）</h2><table>' +
+      '<tr><th>情景</th><th>权重</th><th>W_da</th><th>标定<br>系数k</th><th>中长期<br>Clt</th><th>日前缺口<br>Cda</th>' +
       '<th>分摊−<br>返还</th><th>结算<br>SR</th><th>信用<br>服务</th><th>准备金</th><th>C总</th>' + tierHeads + '</tr>' +
       scenarioRows(r) +
       '<tr><td><b>加权期望 E[C总]</b></td><td class="num">100%</td><td colspan="9"></td><td class="num"><b>' + f2(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num"><b>' + signed(t.expectedProfit) + '</b></td>').join('') + '</tr></table>' +
-      '<div class="meta">Πs = 零售收入单价 − C总,s；亏损概率、VaR/CVaR 按情景权重计算，不假设正态分布。代理日前申报 QDA=Q×g_t×(1+ε)，QLT=r×Q×g_t。</div>' +
+      '<div class="meta">Πs = 零售收入单价 − C总,s；亏损概率、VaR/CVaR 按情景权重计算，不假设正态分布。C_LT=Σ(有效采购电量×采购价) 由批发曲线汇总；日前缺口 E_t=max(Q_t−Q_LT,t,0)，C_DA,s=Σ(E_t×P_DA,s,t)。本口径不含实时价格与日前—实时偏差电费。</div>' +
 
       pvSection(ctx) +
-      billSection(bill, passSum, r) +
+      billSection(bill, billAdd, r) +
 
       '<h2>四、曲线暴露解读</h2><div>' + ctx.cvExplanation + '</div>' +
 
@@ -152,15 +154,17 @@
       '</body></html>';
   }
 
-  function billSection(bill, passSum, r) {
-    if (!bill || !bill.length) return '';
-    const bearerTxt = b => b === 'pass' ? '客户承担（代收/转嫁）' : '售电公司承担';
-    return '<h2>五、预计到户账单（单列，非电能量收入）</h2><table>' +
-      '<tr><th>项目</th><th>元/MWh</th><th>承担方</th></tr>' +
-      bill.map(b => '<tr><td>' + escH(b.name) + '</td><td class="num">' + f2(b.perMwh) + '</td><td>' + bearerTxt(b.bearer) + '</td></tr>').join('') +
-      '<tr><td><b>客户承担合计</b></td><td class="num"><b>' + f2(passSum) + '</b></td><td></td></tr></table>' +
-      '<div class="meta">预计到户参考价 = 电能量等效价 + 客户承担合计：' +
-      r.tiers.map(t => t.name + ' ' + f2(t.price + passSum)).join(' ｜ ') + ' 元/MWh。到户项目承担方由合同模板开关决定。</div>';
+  function billSection(bill, billAdd, r) {
+    if (!bill || !bill.item) return '';
+    const it = bill.item;
+    const bearerTxt = it.bearer === 'pass' ? '客户承担（代收/转嫁）' : '售电公司承担（不入到户价）';
+    return '<h2>五、预计到户账单：预测度电分摊（单列，非电能量收入）</h2><table>' +
+      '<tr><th>月份</th>' + Array.from({ length: 12 }, (_, m) => '<th class="num">' + (m + 1) + '月</th>').join('') + '</tr>' +
+      '<tr><td>分摊值（元/MWh）</td>' + it.monthly.map(v => '<td class="num">' + f2(v) + '</td>').join('') + '</tr>' +
+      '<tr><td>该月电量（MWh）</td>' + Array.from(bill.Qm, v => '<td class="num">' + f2(v) + '</td>').join('') + '</tr></table>' +
+      '<div class="meta">年度化分摊 = Σ(月值×该月电量)/全年电量 = <b>' + f2(bill.annual) + ' 元/MWh</b>（' + bearerTxt + '）。' +
+      '预计到户参考价 = 电能量等效价 + ' + f2(billAdd) + '：' +
+      r.tiers.map(t => t.name + ' ' + f2(t.price + billAdd)).join(' ｜ ') + ' 元/MWh。到户项目承担方由合同模板开关决定。</div>';
   }
 
   function scenarioRows(result) {
@@ -172,10 +176,9 @@
       return '<tr><td>' + s.name + '</td>' +
         '<td class="num">' + (s.weight * 100).toFixed(2) + '%</td>' +
         '<td class="num">' + f2(s.W_da) + '</td>' +
-        '<td class="num">' + (s.rtFactor != null ? s.rtFactor.toFixed(2) : '—') + '</td>' +
+        '<td class="num">' + f2(s.calibK, 4) + '</td>' +
         '<td class="num">' + f2(s.Clt) + '</td>' +
         '<td class="num">' + f2(s.Cda) + '</td>' +
-        '<td class="num">' + f2(s.Crt) + '</td>' +
         '<td class="num">' + signed(s.allocShare - s.refundShare) + '</td>' +
         '<td class="num">' + f2(s.Csettle) + '</td>' +
         '<td class="num">' + f2(s.Ccredit) + '</td>' +
@@ -207,7 +210,7 @@
       inputs: {
         customerName: inputs.customerName || '',
         W: inputs.W, wLt: result.wLt,
-        coverageRatio: result.coverageRatio,
+        coverageAuto: result.procurement.coverage, coverageIsDefault: result.procurement.isDefault,
         unit: inputs.unit,
         curvePoints: validation.count,
         Q_MWh: result.Q
@@ -229,7 +232,6 @@
       intermediates: {
         scenarios: result.scenarios.map(s => ({
           id: s.id, name: s.name, weight: s.weight, priceFactor: s.priceFactor,
-          rtFactor: s.rtFactor, loadError: s.loadError,
           allocShare: s.allocShare, refundShare: s.refundShare,
           W_da: s.W_da, calibK: s.calibK,
           Clt: s.Clt, Cda: s.Cda, Crt: s.Crt,
@@ -248,6 +250,18 @@
           peakValley: (ctx.pv && ctx.pv.active && ctx.pv.perTier[t.key]) || null
         }))
       },
+      procurementSummary: {
+        isDefault: result.procurement.isDefault,
+        coverage: result.procurement.coverage,
+        weightedPrice: result.procurement.weightedPrice,
+        gapMwh: result.procurement.gapMwh, overMwh: result.procurement.overMwh,
+        curveCount: result.procurement.curveCount, logs: result.procurement.logs,
+        curves: (ctx.params.wholesaleCurves || []).map(c => ({
+          id: c.id, name: c.name, status: c.status, enabled: c.enabled,
+          window: c.window, granularity: c.granularity, quantityMode: c.quantityMode,
+          entryCount: (c.entries || []).length, createdAt: c.createdAt, updatedAt: c.updatedAt
+        }))
+      },
       peakValley: ctx.pv ? {
         active: ctx.pv.active, status: ctx.pv.status, reason: ctx.pv.reason,
         coeffRow: ctx.pv.coeffRow || null, chosenByUser: !!ctx.pv.chosenByUser,
@@ -256,7 +270,7 @@
         sources: ctx.pv.sources,
         szTerminal: ctx.szTerm ? { row: ctx.szTerm.row, note: ctx.szTerm.note, warns: ctx.szTerm.warns } : null
       } : null,
-      billLayer: (ctx.params && ctx.params.billLayer) || null,
+      billLayer: ctx.bill ? { item: ctx.bill.item, annual: ctx.bill.annual } : null,
       cvExplanation
     };
   }

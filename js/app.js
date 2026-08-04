@@ -29,6 +29,22 @@
     const ms = $('selMonth');
     for (let m = 1; m <= 12; m++) ms.insertAdjacentHTML('beforeend', '<option value="' + m + '">' + m + ' 月</option>');
     ms.addEventListener('change', renderTypicalDay);
+    // 单日视图的日期下拉（按参数年度生成）
+    const ds = $('selDate');
+    const d0 = new Date(Date.UTC(BUILTIN_PARAMS.meta.year, 0, 1));
+    while (d0.getUTCFullYear() === BUILTIN_PARAMS.meta.year) {
+      const iso = d0.toISOString().slice(0, 10);
+      ds.insertAdjacentHTML('beforeend', '<option value="' + iso + '">' + iso + '</option>');
+      d0.setUTCDate(d0.getUTCDate() + 1);
+    }
+    ds.value = BUILTIN_PARAMS.meta.year + '-07-15';
+    ds.addEventListener('change', renderTypicalDay);
+    document.querySelectorAll('input[name=dayView]').forEach(r => r.addEventListener('change', () => {
+      const isDate = (document.querySelector('input[name=dayView]:checked') || {}).value === 'date';
+      $('selMonth').classList.toggle('hidden', isDate);
+      $('selDate').classList.toggle('hidden', !isDate);
+      renderTypicalDay();
+    }));
   }
 
   function bindTabs() {
@@ -87,8 +103,6 @@
       esc(v.meta.versionName) + ' · 生效 ' + esc(v.meta.effectiveDate || '—') + '<br>' +
       v.scenarios.length + ' 情景（权重 ' + (wSumV * 100).toFixed(0) + '%）· 三部制成本 · 峰谷规则';
     $('versionMetaHint').textContent = v.meta.versionId + '｜创建 ' + (v.meta.createdAt || '—');
-    $('inpR').value = ((state.params.defaults && state.params.defaults.coverageRatio != null)
-      ? state.params.defaults.coverageRatio * 100 : 90).toFixed(0);
     // V1.1：旧版本无峰谷配置时按内置默认补齐
     if (!state.params.peakValley && BUILTIN_PARAMS.peakValley) {
       state.params.peakValley = deepCopy(BUILTIN_PARAMS.peakValley);
@@ -97,15 +111,14 @@
     if (!state.params.costModel && BUILTIN_PARAMS.costModel) {
       state.params.costModel = deepCopy(BUILTIN_PARAMS.costModel);
     }
-    if (!state.params.billLayer && BUILTIN_PARAMS.billLayer) {
-      state.params.billLayer = deepCopy(BUILTIN_PARAMS.billLayer);
+    if (!state.params.billLayer || Array.isArray(state.params.billLayer) ||
+        state.params.billLayer.mode !== 'monthly_allocation') {
+      state.params.billLayer = deepCopy(BUILTIN_PARAMS.billLayer);   // 旧版 7 项结构 → 预测度电分摊单项
     }
-    state.params.scenarios.forEach((s, i) => {
-      const bs = BUILTIN_PARAMS.scenarios[i] || BUILTIN_PARAMS.scenarios[0] || {};
-      if (s.rtFactor == null) s.rtFactor = bs.rtFactor != null ? bs.rtFactor : 1.05;
-      if (s.loadError == null) s.loadError = 0;
+    state.params.scenarios.forEach(s => {
       if (s.allocShare == null) s.allocShare = 0;
       if (s.refundShare == null) s.refundShare = 0;
+      delete s.rtFactor; delete s.loadError;   // V1.4 起弃用实时层参数
     });
     state.params.tiers = state.params.tiers.map((t, i) => {
       if (t.M == null) {
@@ -114,6 +127,11 @@
       }
       return t;
     });
+    // V1.4 兼容：批发曲线数组
+    if (!Array.isArray(state.params.wholesaleCurves)) state.params.wholesaleCurves = [];
+    renderRDerived();
+    renderRDerived();
+    renderWcOverview();
     renderUcMatch();
     renderParamEditor();
     renderVersionsTable();
@@ -207,7 +225,6 @@
     document.querySelectorAll('input[name=unit]').forEach(r => r.addEventListener('change', updateComputeEnabled));
     $('chkUnitConfirm').addEventListener('change', updateComputeEnabled);
     $('inpW').addEventListener('input', updateComputeEnabled);
-    $('inpR').addEventListener('input', updateComputeEnabled);
     // V1.1 用户分类：任何变化实时重匹配并使旧结果失效
     ['ucArea', 'ucPv', 'ucLv', 'ucIce', 'ucVoltage', 'ucMetering', 'ucCategory', 'ucCapacity'].forEach(id =>
       $(id).addEventListener('change', () => { renderUcMatch(); invalidateResult(); }));
@@ -220,7 +237,6 @@
       customerName: $('inpCustomer').value.trim(),
       W: Number($('inpW').value),
       wLt: Number($('inpWLt').value) || 0,
-      rPct: Number($('inpR').value),
       unit: (document.querySelector('input[name=unit]:checked') || {}).value || null,
       unitConfirmed: $('chkUnitConfirm').checked
     };
@@ -305,8 +321,7 @@
   }
   function updateComputeEnabled() {
     const inp = readInputs();
-    const ready = !!(state.validation && state.validation.ok && inp.unit && inp.unitConfirmed &&
-      inp.W > 0 && inp.rPct >= 0 && inp.rPct <= 100);
+    const ready = !!(state.validation && state.validation.ok && inp.unit && inp.unitConfirmed && inp.W > 0);
     $('btnCompute').disabled = !ready;
   }
 
@@ -316,8 +331,8 @@
     if (!state.qRaw) return;
     if (!(inp.W > 0)) { alert('年度批发均价 W 必须大于 0'); return; }
     const wLt = inp.wLt > 0 ? inp.wLt : inp.W;
-    if (!(inp.rPct >= 0 && inp.rPct <= 100)) { alert('中长期覆盖比例须在 0%–100%'); return; }
     const qMWh = inp.unit === 'kWh' ? state.qRaw.map(v => v / 1000) : state.qRaw.slice();
+    state.qMWh = qMWh;   // 供到户账单年度化与曲线解释使用
 
     // V1.1 先行：匹配峰谷系数与时段聚合，确定 K
     const pvPre = matchPeakValley(inp, qMWh);
@@ -325,8 +340,8 @@
     let result;
     try {
       result = Calc.computeQuote({
-        q: qMWh, W: inp.W, wLt,
-        coverageRatio: inp.rPct / 100, K: pvPre.K,
+        q: qMWh, keys: state.validation.series.keys, W: inp.W, wLt,
+        K: pvPre.K,
         params: state.params
       });
     } catch (e) { alert('测算被阻止：' + e.message); return; }
@@ -334,9 +349,10 @@
     state.result = result;
     state.calcTime = Store.now();
     state.inputsUsed = { ...inp, wLt };
-    state.quoteCrumb = (inp.customerName || '未命名客户') + ' · W=' + num(inp.W) + ' / W_LT=' + num(wLt) + ' 元/MWh · r=' +
-      inp.rPct.toFixed(0) + '% · Q=' + result.Q.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) +
-      ' MWh · ' + state.calcTime + ' 测算';
+    const pcv = result.procurement;
+    state.quoteCrumb = (inp.customerName || '未命名客户') + ' · W=' + num(inp.W) + ' / W_LT=' + num(wLt) + ' 元/MWh · 覆盖率=' +
+      (pcv.coverage * 100).toFixed(0) + '%' + (pcv.isDefault ? '（默认假设）' : '') + ' · Q=' +
+      result.Q.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + ' MWh · ' + state.calcTime + ' 测算';
 
     // V1.1 峰谷风险单列（用系数与时段聚合）
     const pvCfg = state.params.peakValley;
@@ -369,6 +385,8 @@
     Store.saveSnapshot(state.snapshot);
     renderSnapshots();
 
+    renderRDerived();
+    renderWcOverview();
     enableResultTabs();
     renderQuote(ctx);
     renderAnalysis(ctx);
@@ -416,6 +434,8 @@
   }
 
   function reportContext() {
+    const blItem = state.params.billLayer && state.params.billLayer.item;
+    const billAnn = blItem ? Calc.annualizeMonthly(blItem.monthly, state.qMWh, state.validation.series.keys) : null;
     return {
       result: state.result,
       inputs: { ...state.inputsUsed, W: state.inputsUsed.W },
@@ -425,7 +445,8 @@
       calcTime: state.calcTime,
       validation: { count: state.validation.stats.count },
       cvExplanation: buildCVExplanation(),
-      uc: state.uc, pv: state.pv, szTerm: state.szTerm
+      uc: state.uc, pv: state.pv, szTerm: state.szTerm,
+      bill: blItem && billAnn ? { item: blItem, annual: billAnn.annual, Qm: billAnn.Qm } : null
     };
   }
 
@@ -480,10 +501,21 @@
       card.addEventListener('click', () => toggleTierDetail(card, t));
       wrap.appendChild(card);
     });
-    // 代理配置提示
-    if (r.proxy && r.proxy.mode === 'standard_proxy') {
-      $('redlineBanner').insertAdjacentHTML('beforeend',
-        '<div class="match-card match-na" style="margin-bottom:14px">标准代理采购配置（QLT = r×Q×g<sub>t</sub>）：仅用于单客户边际报价比较，<b>非真实公司采购合同匹配</b>，本工具不做采购组合优化。</div>');
+    // 采购口径提示（V1.4）
+    if (r.procurement) {
+      const pc = r.procurement;
+      if (pc.isDefault) {
+        $('redlineBanner').insertAdjacentHTML('beforeend',
+          '<div class="match-card match-pending" style="margin-bottom:14px">⚠ 默认年度基准假设：当前无有效批发曲线，按 r<sub>0</sub>×Q×g<sub>t</sub> 虚拟配置（覆盖率 ' +
+          (pc.coverage * 100).toFixed(1) + '%，价格=W_LT）。请在「参数管理 → 批发曲线管理」录入实际采购曲线。</div>');
+      } else {
+        $('redlineBanner').insertAdjacentHTML('beforeend',
+          '<div class="match-card match-na" style="margin-bottom:14px">批发曲线汇总：' + pc.curveCount + ' 条 · 覆盖率 ' +
+          (pc.coverage * 100).toFixed(1) + '% · 加权采购均价 ' + num(pc.weightedPrice) + ' 元/MWh · 日前市场缺口 ' +
+          pc.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh（仅用于单客户边际报价比较，非真实采购合同匹配）' +
+          (pc.overMwh > 0 ? '<br><b style="color:var(--red)">⚠ 超覆盖风险：采购量超过客户预测量 ' + pc.overMwh.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + ' MWh，请检查曲线</b>' : '') +
+          '</div>');
+      }
     }
     // 闸门提示
     if (pv && pv.formalBlocked) {
@@ -551,14 +583,14 @@
 
     $('analysisSummary').innerHTML =
       chip('预期全成本 E[C总]', num(r.EC) + ' 元/MWh', 'blue') +
-      chip('中长期 / 日前 / 实时', num(wAvg(s => s.Clt)) + ' / ' + num(wAvg(s => s.Cda)) + ' / ' + num(wAvg(s => s.Crt)), '') +
-      chip('分摊−返还', sgn(wAvg(s => s.allocShare - s.refundShare)), '') +
+      chip('中长期 / 日前缺口', num(wAvg(s => s.Clt)) + ' / ' + num(wAvg(s => s.Cda)), '') +
+      chip('覆盖率（采购均价）', (r.procurement.coverage * 100).toFixed(1) + '%（' + num(r.procurement.weightedPrice) + '）' + (r.procurement.isDefault ? '·默认假设' : ''), '') +
+      chip('日前市场缺口', r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh', r.procurement.gapMwh > 0 ? 'red' : 'green') +
       chip('结构风险准备金（估算）', num(r.reserve), '') +
-      chip('K 因子', state.pv && state.pv.active ? num(state.pv.K, 4) : '1（非峰谷）', '') +
-      chip('W / W_LT / r', num(r.W) + ' / ' + num(r.wLt) + ' / ' + (r.coverageRatio * 100).toFixed(0) + '%', '');
+      chip('K 因子', state.pv && state.pv.active ? num(state.pv.K, 4) : '1（非峰谷）', '');
 
-    let head = '<tr><th>情景</th><th class="num">权重</th><th class="num">W_da</th><th class="num">实时<br>因子</th><th class="num">负荷<br>误差</th>' +
-      '<th class="num">中长期<br>Clt</th><th class="num">日前<br>Cda</th><th class="num">实时<br>Crt</th><th class="num">分摊−<br>返还</th>' +
+    let head = '<tr><th>情景</th><th class="num">权重</th><th class="num">W_da</th><th class="num">标定<br>系数k</th>' +
+      '<th class="num">中长期<br>Clt</th><th class="num">日前缺口<br>Cda</th><th class="num">分摊−<br>返还</th>' +
       '<th class="num">SR<br>结算</th><th class="num">O<br>信用服务</th><th class="num">准备金</th><th class="num">C总</th>' +
       r.tiers.map(t => '<th class="num">' + esc(t.name) + '<br>利润</th>').join('') + '</tr>';
     let body = r.scenarios.map(s => {
@@ -567,17 +599,16 @@
         return '<td class="num ' + clsProfit(p.profit) + '">' + sgn(p.profit) + '</td>';
       }).join('');
       return '<tr><td>' + esc(s.name) + '</td><td class="num">' + (s.weight * 100).toFixed(2) + '%</td>' +
-        '<td class="num">' + num(s.W_da) + '</td><td class="num">' + num(s.rtFactor, 3) + '</td>' +
-        '<td class="num">' + (s.loadError * 100).toFixed(1) + '%</td>' +
-        '<td class="num">' + num(s.Clt) + '</td><td class="num">' + num(s.Cda) + '</td><td class="num">' + num(s.Crt) + '</td>' +
+        '<td class="num">' + num(s.W_da) + '</td><td class="num">' + num(s.calibK, 4) + '</td>' +
+        '<td class="num">' + num(s.Clt) + '</td><td class="num">' + num(s.Cda) + '</td>' +
         '<td class="num">' + sgn(s.allocShare - s.refundShare) + '</td>' +
         '<td class="num">' + num(s.Csettle) + '</td><td class="num">' + num(s.Ccredit) + '</td>' +
         '<td class="num">' + num(s.Creserve) + '</td>' +
         '<td class="num"><b>' + num(s.Ctotal) + '</b></td>' + cells + '</tr>';
     }).join('');
-    body += '<tr class="ecl"><td><b>加权期望</b></td><td class="num">100%</td><td colspan="2"></td><td></td>' +
+    body += '<tr class="ecl"><td><b>加权期望</b></td><td class="num">100%</td><td colspan="2"></td>' +
       '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td>' +
-      '<td class="num"><b>' + num(wAvg(s => s.Crt)) + '</b></td><td class="num"><b>' + sgn(wAvg(s => s.allocShare - s.refundShare)) + '</b></td>' +
+      '<td class="num"><b>' + sgn(wAvg(s => s.allocShare - s.refundShare)) + '</b></td>' +
       '<td colspan="2"></td><td class="num"><b>' + num(r.reserve) + '</b></td><td class="num"><b>' + num(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num ' + clsProfit(t.expectedProfit) + '"><b>' + sgn(t.expectedProfit) + '</b></td>').join('') + '</tr>';
     $('tblScenarios').innerHTML = head + body;
@@ -606,22 +637,27 @@
     renderBill();
   }
 
-  /** V1.2 预计到户账单（单列，非电能量收入） */
+  /** 预计到户账单（预测度电分摊，单列，非电能量收入） */
   function renderBill() {
     const card = $('billCard'), body = $('billBody');
-    const bill = state.params.billLayer || [];
-    if (!bill.length) { card.style.display = 'none'; return; }
+    const bl = state.params.billLayer;
+    if (!bl || !bl.item || !state.qMWh) { card.style.display = 'none'; return; }
     card.style.display = '';
-    const passSum = bill.filter(b => b.bearer === 'pass').reduce((a, b) => a + Number(b.perMwh || 0), 0);
-    const absorbSum = bill.filter(b => b.bearer === 'absorb').reduce((a, b) => a + Number(b.perMwh || 0), 0);
+    const it = bl.item;
+    const { annual, Qm } = Calc.annualizeMonthly(it.monthly, state.qMWh, state.validation.series.keys);
+    const bearerTxt = it.bearer === 'pass' ? '客户承担（代收/转嫁）' : '售电公司承担（不入到户价）';
+    const billAdd = it.bearer === 'pass' ? annual : 0;
     body.innerHTML =
-      '<table class="tbl"><tr><th>到户项目</th><th class="num">元/MWh</th><th>承担方</th></tr>' +
-      bill.map(b => '<tr><td>' + esc(b.name) + '</td><td class="num">' + num(b.perMwh) + '</td>' +
-        '<td>' + (b.bearer === 'pass' ? '客户承担（代收/转嫁）' : '售电公司承担') + '</td></tr>').join('') +
-      '<tr class="ecl"><td><b>客户承担合计</b></td><td class="num"><b>' + num(passSum) + '</b></td><td>售电承担合计 ' + num(absorbSum) + '（未入到户价）</td></tr></table>' +
-      '<div class="risk-note" style="margin-top:10px;border-left-color:var(--blue)">预计到户参考价 = 电能量等效价 + 客户承担到户项合计：<b>' +
-      state.result.tiers.map(t => esc(t.name) + ' ' + num(t.price + passSum)).join('　｜　') +
-      '</b> 元/MWh。<br>到户项目是否由售电公司代收、转嫁或承担，须由合同模板开关决定；以上不计入电能量收入，也不计入三档价成本。</div>';
+      '<div class="risk-grid">' +
+      '<div class="risk-item"><div class="k">' + esc(it.name) + '（年度化）</div><div class="v">' + num(annual) + ' 元/MWh<small>Σ(月值×该月电量)/全年电量 · ' + bearerTxt + '</small></div></div>' +
+      '</div>' +
+      '<div class="table-wrap"><table class="tbl"><tr><th>月份</th>' +
+      Array.from({ length: 12 }, (_, m) => '<th class="num">' + (m + 1) + '月</th>').join('') + '</tr>' +
+      '<tr><td>分摊值（元/MWh）</td>' + it.monthly.map(v => '<td class="num">' + num(v) + '</td>').join('') + '</tr>' +
+      '<tr><td>客户该月电量（MWh）</td>' + Array.from(Qm, v => '<td class="num">' + num(v, 0) + '</td>').join('') + '</tr></table></div>' +
+      '<div class="risk-note" style="margin-top:10px;border-left-color:var(--blue)">预计到户参考价 = 电能量等效价 + 年度化分摊（' + num(billAdd) + '）：<b>' +
+      state.result.tiers.map(t => esc(t.name) + ' ' + num(t.price + billAdd)).join('　｜　') +
+      '</b> 元/MWh。<br>到户项目是否由售电公司代收、转嫁或承担，须由合同模板开关决定；不计入电能量收入，也不计入三档价成本。</div>';
   }
 
   /** V1.1 峰谷平衡风险单列（不计入三档价） */
@@ -665,15 +701,18 @@
     const r = state.result;
     if (!r) return '';
     const wAvg = f => r.scenarios.reduce((a, s) => a + s.weight * f(s), 0);
-    const cvd = wAvg(s => s.CVda), cvr = wAvg(s => s.CVrt);
-    const dir = cvr > 0
-      ? '客户曲线相对统调曲线，更多电量落在高价时段：<b>实时偏差暴露为正（' + sgn(cvr) + ' 元/MWh），推高成本</b>。'
-      : (cvr < 0
-        ? '客户曲线相对统调曲线，更多电量落在低价时段：<b>实时偏差暴露为负（' + sgn(cvr) + ' 元/MWh），构成曲线优势、降低成本</b>。'
-        : '客户曲线与统调曲线形状基本一致：实时偏差暴露约为 0。');
-    return dir + '<br>曲线暴露分列（情景加权）：日前曲线暴露 ' + sgn(cvd) + ' 元/MWh（按日前价格情景）；' +
-      '实时偏差暴露 ' + sgn(cvr) + ' 元/MWh（按实时价格情景，含负荷误差）。' +
-      '中长期覆盖 r=' + (r.coverageRatio * 100).toFixed(1) + '%，标准代理配置 QLT=r×Q×g<sub>t</sub>（非真实合同匹配），同一量差不重复计入。';
+    const cvd = wAvg(s => s.CVda);
+    const pc = r.procurement;
+    const dir = cvd > 0
+      ? '客户的<b>未锁定电量（日前缺口）</b>更多落在高价日前时段：<b>日前曲线暴露为正（' + sgn(cvd) + ' 元/MWh），推高成本</b>。'
+      : (cvd < 0
+        ? '客户的<b>未锁定电量</b>更多落在低价日前时段：<b>日前曲线暴露为负（' + sgn(cvd) + ' 元/MWh），构成曲线优势</b>。'
+        : '客户未锁定电量时段分布与统调基准基本一致：日前曲线暴露约为 0。');
+    return dir + '<br>中长期覆盖率 ' + (pc.coverage * 100).toFixed(1) + '%（' +
+      (pc.isDefault ? '默认年度基准假设 r0×Q×g<sub>t</sub>' : pc.curveCount + ' 条批发曲线汇总') +
+      '），加权采购均价 ' + num(pc.weightedPrice) + ' 元/MWh；日前市场缺口 ' +
+      pc.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh 暴露于日前价格情景。' +
+      '曲线暴露仅作解释，不与 C_DA 重复计入成本。';
   }
 
   function dailySums(values) {
@@ -687,12 +726,13 @@
 
   function weightedContribs() {
     const r = state.result;
-    const q = r.baseline.map((_, t) => state.qMWh[t]);
-    const out = new Array(q.length).fill(0);
+    const gap = r.procurement.gap;
+    const E0 = r.procurement.gapMwh;
+    const out = new Array(gap.length).fill(0);
     r.scenarios.forEach(s => {
       const p = state.params.scenarios.find(x => x.id === s.id).curve;
-      for (let t = 0; t < q.length; t++) {
-        out[t] += s.weight * (q[t] - r.baseline[t]) * (p[t] * s.calibK) / r.Q;
+      for (let t = 0; t < gap.length; t++) {
+        out[t] += s.weight * (gap[t] - E0 * r.gNorm[t]) * (p[t] * s.calibK) / r.Q;
       }
     });
     return out;
@@ -706,7 +746,7 @@
 
     const expl = $('cvExplanation');
     expl.innerHTML = buildCVExplanation();
-    const wAvgCV = r.scenarios.reduce((a, s) => a + s.weight * s.CVrt, 0);
+    const wAvgCV = r.scenarios.reduce((a, s) => a + s.weight * s.CVda, 0);
     expl.classList.toggle('warn', wAvgCV > 0);
 
     // 全年逐日对比
@@ -714,10 +754,12 @@
     const xLabels = [];
     let lastM = '';
     qd.forEach((d, i) => { const m = d[0].slice(5, 7); if (m !== lastM) { xLabels.push({ i, text: +m + '月' }); lastM = m; } });
+    const pd = dailySums(r.procurement.purchase);
     Charts.lineChart($('chartDaily'), [
       { name: '客户逐日电量 (MWh)', values: qd.map(x => x[1]), color: '#3f9bff' },
-      { name: '统调基准逐日电量 (MWh)', values: bd.map(x => x[1]), color: '#ff9f0a' }
-    ], { xLabels, xValue: i => qd[i][0], unit: 'MWh/日', yLabel: 'MWh/日', diffDigits: 2 });
+      { name: '统调基准 (MWh)', values: bd.map(x => x[1]), color: '#ff9f0a' },
+      { name: '批发采购 (MWh)' + (r.procurement.isDefault ? '·默认假设' : ''), values: pd.map(x => x[1]), color: '#30d158' }
+    ], { xLabels, xValue: i => qd[i][0], unit: 'MWh/日', yLabel: 'MWh/日', diffDigits: 2, toggleable: true });
 
     renderTypicalDay();
 
@@ -747,17 +789,37 @@
 
   function renderTypicalDay() {
     if (!state.result) return;
+    const r = state.result;
+    const pur = r.procurement.purchase;
+    const view = (document.querySelector('input[name=dayView]:checked') || {}).value || 'month';
+    const xl = [0, 3, 6, 9, 12, 15, 18, 21, 23].map(h => ({ i: h, text: h + '时' }));
+    if (view === 'date') {
+      const d = $('selDate').value;
+      const qc = new Array(24).fill(NaN), bc = new Array(24).fill(NaN), pc2 = new Array(24).fill(NaN);
+      curveKeys().forEach((k, i) => {
+        if (k.slice(0, 10) !== d) return;
+        const h = +k.slice(11, 13);
+        qc[h] = state.qMWh[i]; bc[h] = r.baseline[i]; pc2[h] = pur[i];
+      });
+      Charts.lineChart($('chartTypical'), [
+        { name: '客户 (MWh)', values: qc, color: '#3f9bff' },
+        { name: '统调基准 (MWh)', values: bc, color: '#ff9f0a' },
+        { name: '批发采购 (MWh)' + (r.procurement.isDefault ? '·默认假设' : ''), values: pc2, color: '#30d158' }
+      ], { xLabels: xl, xValue: i => d + ' ' + i + ' 时', unit: 'MWh', yLabel: 'MWh', diffDigits: 3, toggleable: true });
+      return;
+    }
     const m = +$('selMonth').value;
-    const qc = new Array(24).fill(0), bc = new Array(24).fill(0), cnt = new Array(24).fill(0);
+    const qc = new Array(24).fill(0), bc = new Array(24).fill(0), pc2 = new Array(24).fill(0), cnt = new Array(24).fill(0);
     curveKeys().forEach((k, i) => {
       if (+k.slice(5, 7) !== m) return;
       const h = +k.slice(11, 13);
-      qc[h] += state.qMWh[i]; bc[h] += state.result.baseline[i]; cnt[h]++;
+      qc[h] += state.qMWh[i]; bc[h] += r.baseline[i]; pc2[h] += pur[i]; cnt[h]++;
     });
     Charts.lineChart($('chartTypical'), [
       { name: '客户逐时均值 (MWh)', values: qc.map((v, h) => v / (cnt[h] || 1)), color: '#3f9bff' },
-      { name: '统调基准逐时均值 (MWh)', values: bc.map((v, h) => v / (cnt[h] || 1)), color: '#ff9f0a' }
-    ], { xLabels: [0, 3, 6, 9, 12, 15, 18, 21, 23].map(h => ({ i: h, text: h + '时' })), xValue: i => i + ' 时', unit: 'MWh', yLabel: 'MWh', diffDigits: 3 });
+      { name: '统调基准逐时均值 (MWh)', values: bc.map((v, h) => v / (cnt[h] || 1)), color: '#ff9f0a' },
+      { name: '批发采购逐时均值 (MWh)' + (r.procurement.isDefault ? '·默认假设' : ''), values: pc2.map((v, h) => v / (cnt[h] || 1)), color: '#30d158' }
+    ], { xLabels: xl, xValue: i => m + '月 ' + i + ' 时（月均）', unit: 'MWh', yLabel: 'MWh', diffDigits: 3, toggleable: true });
   }
 
   /* ================= F 导出与留痕 ================= */
@@ -805,6 +867,59 @@
   /* ================= 参数管理 ================= */
   function bindParamsSection() {
     $('btnGotoParams').addEventListener('click', () => switchTab('params'));
+    $('btnOpenWc').addEventListener('click', openWholesaleDrawer);
+    $('btnExportParams').addEventListener('click', () => {
+      if (!confirm('导出当前参数为 JSON（含批发曲线等全部配置）？该文件可用于替换内置默认数据。')) return;
+      Exporter.downloadJSON(deepCopy(state.params), 'default-params.json');
+    });
+  }
+
+  /** V1.4：覆盖率自动汇总展示（输入页只读） */
+  function renderRDerived() {
+    const el = $('rDerived');
+    if (!el || !state.params) return;
+    const curves = (state.params.wholesaleCurves || []).filter(c => c.enabled !== false);
+    const r0 = (state.params.defaults && state.params.defaults.coverageRatio != null ? state.params.defaults.coverageRatio : 0.9);
+    if (!curves.length) {
+      el.innerHTML = '无有效批发曲线 → <b>默认年度基准假设 r0=' + (r0 * 100).toFixed(0) + '%</b>（Q×g 统调形状分摊）';
+    } else if (state.result && state.result.procurement) {
+      el.innerHTML = curves.length + ' 条批发曲线 → 覆盖率 <b>' + (state.result.procurement.coverage * 100).toFixed(1) + '%</b>（加权采购均价 ' +
+        Calc.unit.fmt(state.result.procurement.weightedPrice) + ' 元/MWh，日前缺口 ' +
+        state.result.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh）';
+    } else {
+      el.innerHTML = curves.length + ' 条批发曲线（覆盖率将在测算后显示）';
+    }
+  }
+
+  /** 参数管理页的批发曲线总览卡 */
+  function renderWcOverview() {
+    const el = $('wcOverview');
+    if (!el || !state.params) return;
+    const curves = (state.params.wholesaleCurves || []).filter(c => c.enabled !== false);
+    if (state.result && state.result.procurement) {
+      const p = state.result.procurement;
+      el.innerHTML =
+        '<div class="schip">已配置 <b>' + curves.length + '</b> 条</div>' +
+        '<div class="schip">当前覆盖率 <b>' + (p.coverage * 100).toFixed(1) + '%</b>' + (p.isDefault ? '（默认假设）' : '') + '</div>' +
+        '<div class="schip">未覆盖量 <b>' + p.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + '</b> MWh</div>';
+    } else {
+      el.innerHTML = '<div class="schip">已配置 <b>' + curves.length + '</b> 条</div><div class="schip hint">测算后显示覆盖率与缺口</div>';
+    }
+  }
+
+  function openWholesaleDrawer() {
+    WholesaleUI.open({
+      params: state.params,
+      keys: Validator.expectedHourKeys(state.params.meta.year),
+      getQ: () => state.qMWh || null,
+      getWlt: () => {
+        const inp = state.inputsUsed;
+        if (inp && inp.wLt > 0) return inp.wLt;
+        const w = Number($('inpW').value);
+        return w > 0 ? w : 372;
+      },
+      onChange: () => { invalidateResult(); renderRDerived(); renderWcOverview(); }
+    });
   }
 
   function renderVersionsTable() {
@@ -816,7 +931,7 @@
         return '<tr><td>' + esc(v.meta.versionId) + (active ? ' <b style="color:var(--blue)">[使用中]</b>' : '') + '</td>' +
           '<td>' + esc(v.meta.versionName) + (builtin ? '（内置）' : '') + '</td>' +
           '<td>' + esc(v.meta.createdAt || '—') + '</td><td>' + esc(v.meta.effectiveDate || '—') + '</td>' +
-          '<td style="white-space:normal;max-width:340px">' + esc(v.meta.source || v.meta.note || '—') + '</td>' +
+          '<td style="white-space:normal;max-width:340px"><details class="src-fold"><summary>来源与说明</summary><div>' + esc(v.meta.source || v.meta.note || '—') + '</div></details></td>' +
           '<td class="inline">' +
           (active ? '' : '<button class="btn btn-sm" data-use="' + esc(v.meta.versionId) + '">使用</button> ') +
           (builtin ? '' : '<button class="btn btn-sm btn-danger" data-rm="' + esc(v.meta.versionId) + '">删除</button>') +
@@ -844,7 +959,7 @@
       fld('版本名称', '<input type="text" id="peVersionName" value="' + esc(p.meta.versionName) + '">') +
       fld('生效日期', '<input type="text" id="peEffDate" value="' + esc(p.meta.effectiveDate || '') + '" placeholder="YYYY-MM-DD">') +
       fld('报价年度', '<input type="text" value="' + p.meta.year + '" disabled>') +
-      '</div><div class="hint">来源：' + esc(p.meta.source || '—') + '</div></div>';
+      '</div><details class="src-fold"><summary>来源与说明</summary><div class="hint">' + esc(p.meta.source || '—') + '</div></details></div>';
 
     html += '<div class="param-block"><h3>默认值与结算口径</h3><div class="param-grid">' +
       fld('中长期覆盖比例默认值 r（%）', '<input type="number" id="peR" min="0" max="100" step="0.1" value="' + ((p.defaults.coverageRatio || 0) * 100) + '">') +
@@ -874,7 +989,8 @@
         return s + '</div>';
       };
       html += '<div class="param-block"><h3>峰谷规则（V1.1 · ' + esc(pvc.ruleVersion) + '，' + esc(pvc.effectiveDate) + ' 起）</h3>' +
-        '<div class="hint" style="margin-bottom:10px">' + esc(pvc.ruleNote || '') + '；来源：' + (pvc.sources || []).map(s => esc(s.name)).join('、') + '</div>' +
+        '<details class="src-fold" style="margin-bottom:10px"><summary>规则说明与官方来源链接</summary><div class="hint">' + esc(pvc.ruleNote || '') + '</div>' +
+        (pvc.sources || []).map(s2 => '<div class="hint">· <a href="' + esc(s2.url) + '" target="_blank" style="color:var(--blue-text)">' + esc(s2.name) + '</a></div>').join('') + '</details>' +
         '<table class="tbl"><tr><th>零售结算系数</th><th class="num">峰 f1</th><th class="num">谷 f2</th><th>适用范围</th></tr>' +
         pvc.retailCoeffs.map(c => '<tr><td>' + esc(c.name) + '</td>' +
           '<td class="num"><input type="number" style="width:90px" id="peRCf1_' + c.id + '" step="0.0001" value="' + c.f1 + '"></td>' +
@@ -932,19 +1048,18 @@
         '<div class="hint">保存新版本后，准备金与风险门槛的审批状态将重置为「未审批」，须由授权人员在此重新审批，否则正式报价导出被闸门阻止。</div></div>';
     }
 
-    // ---------- V1.2 到户账单层 ----------
-    if (p.billLayer) {
-      html += '<div class="param-block"><h3>到户账单层（预计户电费单列，不进电能量收入/成本）</h3>' +
-        '<table class="tbl"><tr><th>项目</th><th class="num">单价（元/MWh）</th><th>承担方</th></tr>' +
-        p.billLayer.map((b, i) => '<tr><td>' + esc(b.name) + '</td>' +
-          '<td class="num"><input type="number" style="width:100px" id="peBill' + i + '" step="0.01" value="' + (b.perMwh || 0) + '"></td>' +
-          '<td><select id="peBillBearer' + i + '" style="width:180px">' +
-          '<option value="pass"' + (b.bearer === 'pass' ? ' selected' : '') + '>客户承担（代收/转嫁）</option>' +
-          '<option value="absorb"' + (b.bearer === 'absorb' ? ' selected' : '') + '>售电公司承担</option></select></td></tr>').join('') +
-        '</table></div>';
+    // ---------- 到户账单层：预测度电分摊（1–12 月逐月预测值） ----------
+    if (p.billLayer && p.billLayer.item) {
+      const it = p.billLayer.item;
+      html += '<div class="param-block"><h3>到户账单层：预测度电分摊（单列，不进电能量收入/成本）</h3>' +
+        '<div class="hint" style="margin-bottom:10px">' + esc(p.billLayer.note || '') + '</div>' +
+        '<div class="param-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">' +
+        it.monthly.map((v, m) => fld((m + 1) + ' 月（元/MWh）', '<input type="number" id="peBillM' + m + '" step="0.01" value="' + (v || 0) + '">')).join('') +
+        fld('承担方', '<select id="peBillBearer"><option value="pass"' + (it.bearer === 'pass' ? ' selected' : '') + '>客户承担（代收/转嫁）</option><option value="absorb"' + (it.bearer === 'absorb' ? ' selected' : '') + '>售电公司承担</option></select>') +
+        '</div><div class="hint">年度化口径：Σ(月分摊值 × 客户该月电量) / 全年电量。</div></div>';
     }
 
-    html += '<div class="param-block"><h3>价格情景（权重合计须为 100%）　<span id="peWSum" style="font-weight:700">当前合计：' + (wSum * 100).toFixed(2) + '%</span></h3>';
+    html += '<div class="param-block"><h3>日前价格情景（权重合计须为 100%；V1.4 起仅日前口径，无实时情景）　<span id="peWSum" style="font-weight:700">当前合计：' + (wSum * 100).toFixed(2) + '%</span></h3>';
     p.scenarios.forEach((s, i) => {
       html += '<div class="scenario-edit"><div class="head"><b>' + esc(s.name) + '</b>' +
         '<span class="hint">曲线 8760 点｜原始统调加权均价 ' + num(weightedAvg(p.baseline.curve, s.curve), 1) + ' 元/MWh（报价时按 W_s 标定，仅取形状）</span></div>' +
@@ -952,8 +1067,6 @@
         fld('情景名称', '<input type="text" id="peSname' + i + '" value="' + esc(s.name) + '">') +
         fld('权重（%）', '<input type="number" class="peWeight" data-i="' + i + '" id="peSw' + i + '" min="0" max="100" step="0.01" value="' + (s.weight * 100).toFixed(2) + '">') +
         fld('价格因子（W_da = W × 因子）', '<input type="number" id="peSf' + i + '" step="0.01" value="' + (s.priceFactor != null ? s.priceFactor : 1) + '">') +
-        fld('实时价差因子（PRT=PDA×因子）', '<input type="number" id="peSrt' + i + '" step="0.01" value="' + (s.rtFactor != null ? s.rtFactor : 1.05) + '">') +
-        fld('负荷误差 ε（QDA=Q·g·(1+ε)）', '<input type="number" id="peSle' + i + '" step="0.01" value="' + (s.loadError || 0) + '">') +
         fld('C分摊（元/MWh）', '<input type="number" id="peSalloc' + i + '" step="0.1" value="' + (s.allocShare || 0) + '">') +
         fld('R返还（元/MWh）', '<input type="number" id="peSref' + i + '" step="0.1" value="' + (s.refundShare || 0) + '">') +
         fld('SR_s 结算调整（元/MWh）', '<input type="number" id="peSsr' + i + '" step="0.1" value="' + (s.sr || 0) + '">') +
@@ -1129,18 +1242,14 @@
       if (reserveChanged) cm.reserveApproval = { ok: false };
       cm.validUntil = $('peValidUntil').value.trim() || null;
     }
-    if (p.billLayer) {
-      p.billLayer.forEach((b, i) => {
-        b.perMwh = Number($('peBill' + i).value) || 0;
-        b.bearer = $('peBillBearer' + i).value;
-      });
+    if (p.billLayer && p.billLayer.item && $('peBillM0')) {
+      p.billLayer.item.monthly = p.billLayer.item.monthly.map((_, m) => Number($('peBillM' + m).value) || 0);
+      p.billLayer.item.bearer = $('peBillBearer').value;
     }
     const wSum = p.scenarios.reduce((a, s, i) => {
       s.name = $('peSname' + i).value.trim() || s.name;
       s.weight = Number($('peSw' + i).value) / 100;
       s.priceFactor = Number($('peSf' + i).value);
-      if ($('peSrt' + i)) s.rtFactor = Number($('peSrt' + i).value);
-      if ($('peSle' + i)) s.loadError = Number($('peSle' + i).value) || 0;
       if ($('peSalloc' + i)) s.allocShare = Number($('peSalloc' + i).value) || 0;
       if ($('peSref' + i)) s.refundShare = Number($('peSref' + i).value) || 0;
       s.sr = Number($('peSsr' + i).value) || 0;

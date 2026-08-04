@@ -95,29 +95,145 @@
     return { varA, cvar };
   }
 
+  /* ================= V1.4 批发曲线管理（中长期+日前两部制） ================= */
+
+  const GRAN_RANK = { year_month: 1, month_day: 2, day_hour: 3 };
+  const GRAN_NAME = { year_month: '年分月', month_day: '月分日', day_hour: '日分时' };
+
   /**
-   * 报价主计算（V1.2/1.3 三部制成本模型）。
-   *  C批发,s = Σt[QLT×PLT + (QDA−QLT)×PDA + (Q实−QDA)×PRT] + C分摊,s − R返还,s
-   *  QLT,t = r×Q×g_t（标准代理配置）；QDA,t = Q×g_t×(1+ε_s)；Q实,t = q_t
-   *  C总,s = C批发,s + C结算,s(SR) + C信用服务,s(O) + 结构风险准备金
+   * 展开一条批发曲线到小时级（Map: 小时下标 → {mwh, price}）。
+   * 年分月/月分日按统调比例 g 在该条目作用域内分配到小时，保持条目总电量不变。
+   * @param curve {window:{from,to}('MM-DD'), granularity, quantityMode, entries:[{timeKey,quantityMwh,ratioPct,priceYuanPerMwh}]}
+   * @param keys 全年 8760 键（'YYYY-MM-DD|HH'）
+   * @param gNorm 归一化统调比例
+   * @param q 客户逐时预测电量（覆盖率换算用）
+   */
+  function expandCurve(curve, keys, gNorm, q) {
+    const out = new Map();
+    const gIdx = new Map(keys.map((k, i) => [k, i]));
+    const win = curve.window || { from: '01-01', to: '12-31' };
+    const inWin = t => { const md = keys[t].slice(5, 10); return md >= win.from && md <= win.to; };
+
+    for (const e of curve.entries || []) {
+      let hours = [];
+      if (curve.granularity === 'year_month') {
+        const mm = String(e.timeKey).slice(-2);
+        for (let t = 0; t < keys.length; t++) if (keys[t].slice(5, 7) === mm && inWin(t)) hours.push(t);
+      } else if (curve.granularity === 'month_day') {
+        for (let h = 0; h < 24; h++) {
+          const i = gIdx.get(e.timeKey + '|' + (h < 10 ? '0' : '') + h);
+          if (i != null && inWin(i)) hours.push(i);
+        }
+      } else { // day_hour
+        const i = gIdx.get(e.timeKey);
+        if (i != null && inWin(i)) hours.push(i);
+      }
+      if (!hours.length) continue;
+
+      // 电量：MWh 直接录入；覆盖率按该条目作用域内客户预测电量换算
+      let mwh = Number(e.quantityMwh);
+      if (curve.quantityMode === 'ratio') {
+        const scopeQ = hours.reduce((a, t) => a + q[t], 0);
+        mwh = scopeQ * (Number(e.ratioPct) || 0) / 100;
+      }
+      if (!(mwh >= 0)) continue;
+      const price = Number(e.priceYuanPerMwh) || 0;
+
+      if (curve.granularity === 'day_hour') {
+        out.set(hours[0], { mwh, price });
+      } else {
+        const gsum = hours.reduce((a, t) => a + gNorm[t], 0);
+        if (!(gsum > 0)) continue;
+        hours.forEach(t => out.set(t, { mwh: mwh * gNorm[t] / gsum, price }));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 覆盖汇总：按录入时间升序，细粒度覆盖粗粒度、同粒度后录入覆盖；
+   * 只作用于新曲线实际填写的时段。旧曲线不物理删除（由上层管理 enabled）。
+   * @returns {purchase[], price[], source[], gap[], over[], totalPurchase, totalCost,
+   *           weightedPrice, coverage, gapMwh, overMwh, isDefault, logs}
+   */
+  function buildProcurement(curves, q, keys, gNorm, dflt) {
+    const n = keys.length;
+    const finalArr = new Array(n).fill(null);
+    const logs = [];
+    const active = (curves || []).filter(c => c.enabled !== false)
+      .slice().sort((a, b) => String(a.createdAt) < String(b.createdAt) ? -1 : 1);
+
+    if (!active.length) {
+      // 默认假设：r0 × Q × g_t，价格=中长期均价锚点
+      const r0 = dflt && dflt.ratio != null ? dflt.ratio : 0.9;
+      const price = dflt && dflt.price != null ? dflt.price : 0;
+      const Q = q.reduce((a, b) => a + b, 0);
+      const purchase = gNorm.map(g => r0 * Q * g);
+      return {
+        purchase, price: new Array(n).fill(price), source: new Array(n).fill('默认年度基准假设'),
+        gap: q.map((v, t) => Math.max(v - purchase[t], 0)),
+        over: new Array(n).fill(0), rank: new Array(n).fill(1),
+        totalPurchase: r0 * Q, totalCost: r0 * Q * price, weightedPrice: price,
+        coverage: r0, gapMwh: Q * (1 - r0), overMwh: 0, isDefault: true, logs: []
+      };
+    }
+
+    for (const c of active) {
+      const exp = expandCurve(c, keys, gNorm, q);
+      let wrote = 0, replaced = 0, replacedMwh = 0;
+      exp.forEach((v, t) => {
+        const cur = finalArr[t];
+        if (!cur) { finalArr[t] = { ...v, rank: GRAN_RANK[c.granularity], src: c }; wrote++; }
+        else if (GRAN_RANK[c.granularity] >= cur.rank) {
+          replaced++; replacedMwh += cur.mwh;
+          finalArr[t] = { ...v, rank: GRAN_RANK[c.granularity], src: c };
+        }
+      });
+      if (replaced > 0) logs.push({ curveId: c.id, name: c.name, granularity: c.granularity, replacedHours: replaced, replacedMwh });
+    }
+
+    const purchase = new Array(n).fill(0), price = new Array(n).fill(null), source = new Array(n).fill(null);
+    const rank = new Array(n).fill(0);
+    const gap = new Array(n).fill(0), over = new Array(n).fill(0);
+    let totalPurchase = 0, totalCost = 0, gapMwh = 0, overMwh = 0;
+    for (let t = 0; t < n; t++) {
+      const f = finalArr[t];
+      if (f) {
+        purchase[t] = f.mwh; price[t] = f.price; rank[t] = f.rank;
+        source[t] = f.src.name + '（' + (GRAN_NAME[f.src.granularity] || f.src.granularity) + '）';
+        totalPurchase += f.mwh; totalCost += f.mwh * f.price;
+      }
+      gap[t] = Math.max(q[t] - purchase[t], 0); gapMwh += gap[t];
+      over[t] = Math.max(purchase[t] - q[t], 0); overMwh += over[t];
+    }
+    const Q = q.reduce((a, b) => a + b, 0);
+    return {
+      purchase, price, source, rank, gap, over,
+      totalPurchase, totalCost,
+      weightedPrice: totalPurchase > 0 ? totalCost / totalPurchase : 0,
+      coverage: Q > 0 ? totalPurchase / Q : 0,
+      gapMwh, overMwh, isDefault: false, logs
+    };
+  }
+
+  /**
+   * 报价主计算（V1.4「中长期 + 日前」两部制）。
+   *  C_LT = Σ(逐时有效采购电量 × 逐时有效采购价格)        ← 批发曲线管理汇总
+   *  E_t = max(Q_t − Q_LT,t, 0)                           ← 日前市场缺口
+   *  C_DA,s = Σ(E_t × P_DA,s,t)                           ← 仅日前价格情景
+   *  C总,s = C_LT/Q + C_DA,s/Q + (分摊−返还) + SR + O + 结构风险准备金
    *  P平,k = [Quantile(C总,qk) + Mk] / K；Πs,k = P平,k×K − C总,s（元/MWh）
-   * @param {object} args
-   *  q: number[8760] 客户逐时电量（MWh）
-   *  W: number 日前价格锚点（元/MWh）
-   *  wLt: number 中长期年度均价（元/MWh，平坦分时）
-   *  coverageRatio: 0~1
-   *  K: number 峰谷系数加权因子（非峰谷用户=1）
-   *  params: 系统参数版本
+   *  不含实时价格、负荷预测偏差与日前—实时偏差电费（V1.4 边界）。
    */
   function computeQuote(args) {
-    const { q, W, wLt, coverageRatio, params } = args;
+    const { q, W, wLt, params } = args;
     const K = args.K != null ? args.K : 1;
-    if (!Array.isArray(q) || q.length !== params.meta.hours) {
+    const keys = args.keys;
+    if (!Array.isArray(q) || !Array.isArray(keys) || q.length !== params.meta.hours || keys.length !== params.meta.hours) {
       throw new Error('客户曲线点数与参数年度小时数不一致');
     }
     if (!(W > 0)) throw new Error('年度批发均价 W 必须大于 0');
     if (!(wLt > 0)) throw new Error('中长期年度均价必须大于 0');
-    if (!(coverageRatio >= 0 && coverageRatio <= 1)) throw new Error('中长期覆盖比例须在 0%–100% 之间');
     if (!(K > 0)) throw new Error('K 因子必须为正');
 
     const cm = params.costModel || {};
@@ -127,41 +243,40 @@
     const Q = totalEnergy(q);
     if (!(Q > 0)) throw new Error('客户全年电量必须大于 0');
     const b = baselineCurve(Q, gNorm);
-    const r = coverageRatio;
+
+    // 批发曲线汇总（无曲线 → 系统默认基准假设，明确标注）
+    const proc = buildProcurement(params.wholesaleCurves || [], q, keys, gNorm, {
+      ratio: (params.defaults && params.defaults.coverageRatio != null) ? params.defaults.coverageRatio : 0.9,
+      price: wLt
+    });
 
     const wSum = params.scenarios.reduce((a, s) => a + Number(s.weight || 0), 0);
     if (Math.abs(wSum - 1) > 1e-6) {
       throw new Error('情景权重合计必须为 100%（当前 ' + (wSum * 100).toFixed(4) + '%），请在参数管理中修正');
     }
 
-    // 逐情景三部制成本
+    const Clt = proc.totalCost / Q;                       // 中长期成本（各情景相同）
+    const Ebase = b.map((_, t) => proc.gapMwh * gNorm[t]); // 基准日前暴露曲线 E_base,t = E×g_t
+
     const scenarios = params.scenarios.map(s => {
-      const rtF = Number(s.rtFactor != null ? s.rtFactor : 1.05);
-      const eps = Number(s.loadError || 0);
       const alloc = Number(s.allocShare || 0), refund = Number(s.refundShare || 0);
       const Wda = W * Number(s.priceFactor == null ? 1 : s.priceFactor);
-      const cal = calibratePriceCurve(gNorm, s.curve, Wda);   // PDA,s,t（标定到日前锚点）
-      let Clt = 0, Cda = 0, Crt = 0, CVda = 0;
+      const cal = calibratePriceCurve(gNorm, s.curve, Wda);   // P_DA,s,t（标定到日前锚点）
+      let Cda = 0, CVda = 0;
       for (let t = 0; t < q.length; t++) {
-        const qlt = r * b[t];                  // QLT,t = r×Q×g_t
-        const qda = b[t] * (1 + eps);          // QDA,t = Q×g_t×(1+ε)
-        const pda = cal.curve[t];
-        const prt = pda * rtF;
-        Clt += qlt * wLt;
-        Cda += (qda - qlt) * pda;
-        Crt += (q[t] - qda) * prt;
-        CVda += (q[t] - b[t]) * pda;           // 展示指标：日前曲线暴露
+        Cda += proc.gap[t] * cal.curve[t];
+        CVda += (proc.gap[t] - Ebase[t]) * cal.curve[t];      // 展示指标：日前曲线暴露
       }
-      Clt /= Q; Cda /= Q; Crt /= Q; CVda /= Q;
-      const Cwholesale = Clt + Cda + Crt + alloc - refund;
+      Cda /= Q; CVda /= Q;
+      const Cwholesale = Clt + Cda + alloc - refund;
       const Csettle = Number(s.sr || 0), Ccredit = Number(s.o || 0);
       const Ctotal = Cwholesale + Csettle + Ccredit + reserve;
       return {
         id: s.id, name: s.name, weight: Number(s.weight),
         priceFactor: Number(s.priceFactor == null ? 1 : s.priceFactor),
-        rtFactor: rtF, loadError: eps, allocShare: alloc, refundShare: refund,
+        allocShare: alloc, refundShare: refund,
         W_da: Wda, calibK: cal.k,
-        Clt, Cda, Crt, CVda, CVrt: Crt,
+        Clt, Cda, CVda,
         Cwholesale, Csettle, Ccredit, Creserve: reserve, Ctotal
       };
     });
@@ -210,11 +325,23 @@
     });
 
     return {
-      Q, W, wLt, coverageRatio, K, gNorm, baseline: b,
-      proxy: {
-        mode: (cm.procurementMode || 'standard_proxy'),
-        note: cm.procurementNote || '',
-        QLTsum: r * Q, QDAsum: Q, Qsum: Q
+      Q, W, wLt, K, gNorm, baseline: b,
+      procurement: {
+        isDefault: proc.isDefault,
+        coverage: proc.coverage,                 // 实际覆盖率（由批发曲线自动汇总）
+        weightedPrice: proc.weightedPrice,       // 加权采购均价
+        totalPurchase: proc.totalPurchase,
+        gapMwh: proc.gapMwh,                     // 日前市场缺口
+        overMwh: proc.overMwh,                   // 超覆盖量（>0 须警告）
+        curveCount: (params.wholesaleCurves || []).filter(c => c.enabled !== false).length,
+        logs: proc.logs,                         // 覆盖日志
+        purchase: proc.purchase,                 // 逐时采购量（曲线解释页用）
+        price: proc.price,                       // 逐时采购价
+        source: proc.source,                     // 逐时来源
+        gap: proc.gap,                           // 逐时日前缺口
+        note: proc.isDefault
+          ? '无有效批发曲线：使用系统默认年度基准假设（r0×Q×g_t，价格=W_LT），标注为默认假设'
+          : '由 ' + ((params.wholesaleCurves || []).filter(c => c.enabled !== false).length) + ' 条有效批发曲线汇总；不把客户映射为公司真实采购合同'
       },
       scenarios, EC, tiers,
       reserve, thresholds: th
@@ -340,10 +467,26 @@
     };
   }
 
+  /**
+   * 到户层「预测度电分摊」年度化：逐月值按客户逐月电量加权。
+   * @param monthly number[12]（元/MWh） @param q number[8760] @param keys 8760 时间键
+   * @returns { annual, Qm } annual=Σ(m_m×Q_m)/Q；Qm 为逐月电量
+   */
+  function annualizeMonthly(monthly, q, keys) {
+    const Qm = new Array(12).fill(0);
+    for (let t = 0; t < q.length; t++) Qm[+keys[t].slice(5, 7) - 1] += q[t];
+    const Q = Qm.reduce((a, b) => a + b, 0);
+    if (!(Q > 0)) return { annual: 0, Qm };
+    let s = 0;
+    for (let m = 0; m < 12; m++) s += (Number((monthly || [])[m]) || 0) * Qm[m];
+    return { annual: s / Q, Qm };
+  }
+
   return {
     EPS, normalize, totalEnergy, baselineCurve, calibratePriceCurve,
     curveValue, curveValueContribs, exposureCost, weightedQuantile, weightedVaRCVaR,
-    computeQuote, unit,
-    tofuAggregate, matchRetailCoeff, szTerminalLookup, peakValleyPrices, peakValleyRisks
+    computeQuote, unit, annualizeMonthly,
+    tofuAggregate, matchRetailCoeff, szTerminalLookup, peakValleyPrices, peakValleyRisks,
+    GRAN_RANK, GRAN_NAME, expandCurve, buildProcurement
   };
 });

@@ -73,7 +73,7 @@ ok('系统运行费/市场分摊默认=0', near(rk.sysOpFee, 0) && near(rk.marke
 
 /* ---------- 6. 内置参数完整性 ---------- */
 console.log('\n[6] 内置参数 sys-v2026.2 完整性');
-ok('版本号 sys-v2026.3', PARAMS.meta.versionId === 'sys-v2026.3');
+ok('版本号', PARAMS.meta.versionId === 'sys-v2026.7');
 ok('4 组零售系数', PV.retailCoeffs.length === 4);
 ok('深圳终端表 11 行', PV.szTerminal.rows.length === 11);
 ok('时段表峰谷不重叠且 ≤24 小时', (() => {
