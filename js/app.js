@@ -657,7 +657,9 @@
       '<tr><td>客户该月电量（MWh）</td>' + Array.from(Qm, v => '<td class="num">' + num(v, 0) + '</td>').join('') + '</tr></table></div>' +
       '<div class="risk-note" style="margin-top:10px;border-left-color:var(--blue)">预计到户参考价 = 电能量等效价 + 年度化分摊（' + num(billAdd) + '）：<b>' +
       state.result.tiers.map(t => esc(t.name) + ' ' + num(t.price + billAdd)).join('　｜　') +
-      '</b> 元/MWh。<br>到户项目是否由售电公司代收、转嫁或承担，须由合同模板开关决定；不计入电能量收入，也不计入三档价成本。</div>';
+      '</b> 元/MWh。<br>' + (it.bearer === 'pass'
+        ? '承担方=客户承担（代收/转嫁）：分摊<b>不计入</b>三档价成本，仅在到户参考价中单列；不计入电能量收入。'
+        : '承担方=售电公司承担：分摊<b>已计入</b>三档价全成本（CbillAbsorb=' + num(annual) + ' 元/MWh），到户参考价不再重复计列。') + '</div>';
   }
 
   /** V1.1 峰谷平衡风险单列（不计入三档价） */
@@ -1051,8 +1053,8 @@
     // ---------- 到户账单层：预测度电分摊（1–12 月逐月预测值） ----------
     if (p.billLayer && p.billLayer.item) {
       const it = p.billLayer.item;
-      html += '<div class="param-block"><h3>到户账单层：预测度电分摊（单列，不进电能量收入/成本）</h3>' +
-        '<div class="hint" style="margin-bottom:10px">' + esc(p.billLayer.note || '') + '</div>' +
+      html += '<div class="param-block"><h3>到户账单层：预测度电分摊（1–12 月逐月值）</h3>' +
+        '<div class="hint" style="margin-bottom:10px">承担方=售电公司承担 → <b>计入三档价全成本</b>；客户承担（代收/转嫁）→ 不计入成本，仅在到户参考价单列。</div>' +
         '<div class="param-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">' +
         it.monthly.map((v, m) => fld((m + 1) + ' 月（元/MWh）', '<input type="number" id="peBillM' + m + '" step="0.01" value="' + (v || 0) + '">')).join('') +
         fld('承担方', '<select id="peBillBearer"><option value="pass"' + (it.bearer === 'pass' ? ' selected' : '') + '>客户承担（代收/转嫁）</option><option value="absorb"' + (it.bearer === 'absorb' ? ' selected' : '') + '>售电公司承担</option></select>') +

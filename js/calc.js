@@ -258,6 +258,13 @@
     const Clt = proc.totalCost / Q;                       // 中长期成本（各情景相同）
     const Ebase = b.map((_, t) => proc.gapMwh * gNorm[t]); // 基准日前暴露曲线 E_base,t = E×g_t
 
+    // 到户层「预测度电分摊」：售电公司承担（absorb）→ 计入全成本；客户承担（pass）→ 转嫁不计入
+    let billAbsorb = 0;
+    const bl = params.billLayer;
+    if (bl && bl.item && bl.item.bearer !== 'pass' && Array.isArray(bl.item.monthly)) {
+      billAbsorb = annualizeMonthly(bl.item.monthly, q, keys).annual;
+    }
+
     const scenarios = params.scenarios.map(s => {
       const alloc = Number(s.allocShare || 0), refund = Number(s.refundShare || 0);
       // priceMode='direct'：8760 价格值原样使用（实际/预测日前价格，不标定）；
@@ -277,14 +284,14 @@
       Cda /= Q; CVda /= Q;
       const Cwholesale = Clt + Cda + alloc - refund;
       const Csettle = Number(s.sr || 0), Ccredit = Number(s.o || 0);
-      const Ctotal = Cwholesale + Csettle + Ccredit + reserve;
+      const Ctotal = Cwholesale + Csettle + Ccredit + reserve + billAbsorb;
       return {
         id: s.id, name: s.name, weight: Number(s.weight),
         priceFactor: Number(s.priceFactor == null ? 1 : s.priceFactor),
         allocShare: alloc, refundShare: refund,
         W_da: Wda, calibK: cal.k,
         Clt, Cda, CVda,
-        Cwholesale, Csettle, Ccredit, Creserve: reserve, Ctotal
+        Cwholesale, Csettle, Ccredit, Creserve: reserve, CbillAbsorb: billAbsorb, Ctotal
       };
     });
 
