@@ -260,8 +260,15 @@
 
     const scenarios = params.scenarios.map(s => {
       const alloc = Number(s.allocShare || 0), refund = Number(s.refundShare || 0);
-      const Wda = W * Number(s.priceFactor == null ? 1 : s.priceFactor);
-      const cal = calibratePriceCurve(gNorm, s.curve, Wda);   // P_DA,s,t（标定到日前锚点）
+      // priceMode='direct'：8760 价格值原样使用（实际/预测日前价格，不标定）；
+      // 否则按「形状 × W_da」标定（比例估算，旧 v1/v2/v3 口径）
+      const direct = s.priceMode === 'direct';
+      const cal = direct
+        ? { curve: s.curve, k: 1 }
+        : calibratePriceCurve(gNorm, s.curve, W * Number(s.priceFactor == null ? 1 : s.priceFactor));
+      const Wda = direct
+        ? s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0)   // 展示：直接曲线的统调加权均价
+        : W * Number(s.priceFactor == null ? 1 : s.priceFactor);
       let Cda = 0, CVda = 0;
       for (let t = 0; t < q.length; t++) {
         Cda += proc.gap[t] * cal.curve[t];

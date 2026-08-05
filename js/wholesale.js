@@ -58,7 +58,14 @@
       '<select id="wcTplGran" class="btn btn-sm" style="width:auto;cursor:pointer" title="选择要下载的模板粒度">' +
       '<option value="year_month">年分月模板</option><option value="month_day">月分日模板</option><option value="day_hour">日分时模板</option></select>' +
       '<button class="btn btn-sm" id="wcDlTpl">下载模板</button>' +
-      '<label class="btn btn-sm" style="cursor:pointer">导入 xlsx<input type="file" id="wcImpFile" accept=".xlsx,.xls" style="display:none"></label></div>' +
+      '<label class="btn btn-sm" style="cursor:pointer">导入 xlsx<input type="file" id="wcImpFile" accept=".xlsx,.xls" style="display:none"></label>' +
+      '<button class="btn btn-sm" id="wcImp8760Btn">导入 8760 曲线</button></div>' +
+      '<div id="wc8760Area" class="hidden card wc-card" style="margin:0 0 12px;padding:12px">' +
+      '<div class="inline gap">' +
+      '<label style="margin:0">统一价格（元/MWh，三列格式时必填）</label>' +
+      '<input type="number" id="wc8760Price" step="0.01" value="372" style="width:120px">' +
+      '<label class="btn btn-sm btn-primary" style="cursor:pointer;margin:0">选择 8760 文件<input type="file" id="wc8760File" accept=".xlsx,.xls" style="display:none"></label></div>' +
+      '<div class="hint" style="margin-top:6px">直接导入全年逐时采购曲线：四列（日期｜时刻｜电量(MWh)｜价格(元/MWh)）或三列（日期｜时刻｜电量，价格用上方统一价）；缺小时自动进入日前缺口。生成「日分时·全年」曲线。</div></div>' +
       '<div class="hint" style="margin:-4px 0 10px">三种粒度各自独立的模板文件（年分月/月分日/日分时），下拉选择后下载，导入时各导各的互不干扰；模板时间轴已预置，填顶部曲线名称后竖着粘贴「电量(MWh)」「价格(元/MWh)」两列即可，整行留空自动跳过。导入后需确认并在参数管理保存新版本。</div>' +
       listHtml(list, p) + '</div>' +
       (editing ? editorHtml() : '') +
@@ -161,6 +168,28 @@
   function editorHtml() {
     const c = editing;
     const keys = entryKeys(c);
+    // 8760 直导等大曲线：不重建明细，只读统计（避免渲染数千输入框卡死）
+    if (c.entries.length > 500) {
+      const totalMwh = c.entries.reduce((a, e) => a + (Number(e.quantityMwh) || 0), 0);
+      const costSum = c.entries.reduce((a, e) => a + (Number(e.quantityMwh) || 0) * (Number(e.priceYuanPerMwh) || 0), 0);
+      const wavg = totalMwh > 0 ? costSum / totalMwh : 0;
+      return '<div class="card wc-card wc-editor"><h2><span class="step">B</span>查看曲线（8760 直导，只读）</h2>' +
+        '<div class="param-grid">' +
+        fld('曲线名称', '<input type="text" id="wcName" value="' + esc(c.name) + '">') +
+        fld('采购状态', '<select id="wcStatus">' + ['locked', 'planned', 'scenario'].map(s => '<option value="' + s + '"' + (c.status === s ? ' selected' : '') + '>' + STATUS[s] + '</option>').join('') + '</select>') +
+        '</div>' +
+        '<div class="sgrid" style="margin:10px 0">' +
+        '<div class="schip">粒度 <b>日分时（逐时）</b></div>' +
+        '<div class="schip">窗口 <b>' + esc(c.window.from) + ' ~ ' + esc(c.window.to) + '</b></div>' +
+        '<div class="schip">明细 <b>' + c.entries.length + ' 小时</b></div>' +
+        '<div class="schip">总电量 <b>' + totalMwh.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + ' MWh</b></div>' +
+        '<div class="schip">加权均价 <b>' + wavg.toFixed(2) + ' 元/MWh</b></div>' +
+        '<div class="schip">录入时间 <b>' + esc(c.createdAt || '—') + '</b></div></div>' +
+        '<div class="hint">8760 逐时曲线为只读（数据量大，不提供逐行编辑）；如需调整请重新导入，或在参数管理删除该曲线。</div>' +
+        '<div id="wcImpact" class="hint"></div>' +
+        '<div class="actions"><button class="btn btn-primary" id="wcSave">保存（名称/状态）</button>' +
+        '<button class="btn" id="wcCancel">取消</button></div></div>';
+    }
     if (c.entries.length !== keys.length || c.entries.some((e, i) => e.timeKey !== keys[i])) {
       // 结构变化时重建明细（保留同 timeKey 旧值）
       const old = new Map((c.entries || []).map(e => [e.timeKey, e]));
@@ -247,6 +276,35 @@
       c.priceMode = 'perEntry';
       editing = c; render();
     });
+    // 导入 8760 逐时曲线
+    $('wcImp8760Btn').addEventListener('click', () => $('wc8760Area').classList.toggle('hidden'));
+    $('wc8760File').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        const res = WcImport8760.parseWholesale8760(rd.result, ctx.params.meta.year, $('wc8760Price').value);
+        e.target.value = '';
+        if (!res.entries) { alert('导入失败：' + res.errors.join('；')); return; }
+        const s = res.stats;
+        const warn = res.errors.length ? '\n\n提示：' + res.errors.slice(0, 3).join('；') : '';
+        if (!confirm('将生成「日分时·全年」曲线：' + s.hours + ' 小时 / ' +
+          s.totalMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh / 加权均价 ' +
+          s.weightedPrice.toFixed(2) + ' 元/MWh（' + s.firstKey + ' ~ ' + s.lastKey + '）' + warn + '\n\n确认导入？')) return;
+        const now = Store.now();
+        curves().push({
+          id: 'wc-8760-' + Date.now().toString(36),
+          name: '8760 逐时采购（' + s.hours + ' 小时）',
+          status: 'locked', enabled: true, createdAt: now, updatedAt: now, year: ctx.params.meta.year,
+          window: { from: '01-01', to: '12-31' }, granularity: 'day_hour',
+          quantityMode: 'mwh', priceMode: res.priceMode, flatPrice: res.flatPrice,
+          entries: res.entries, note: '8760 逐时直导'
+        });
+        $('wc8760Area').classList.add('hidden');
+        render();
+      };
+      rd.readAsArrayBuffer(f);
+    });
     document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
       editing = JSON.parse(JSON.stringify(curves().find(x => x.id === b.dataset.edit)));
       render();
@@ -293,6 +351,16 @@
     c.name = $('wcName').value.trim();
     if (!c.name) { alert('请填写曲线名称'); return; }
     c.status = $('wcStatus').value;
+    // 8760 直导等只读大曲线：只保存名称/状态，entries 不动
+    if (c.entries.length > 500) {
+      c.updatedAt = Store.now();
+      const list = curves();
+      const i = list.findIndex(x => x.id === c.id);
+      if (i >= 0) list[i] = c; else list.push(c);
+      editing = null;
+      render();
+      return;
+    }
     c.window.from = $('wcFrom').value.trim();
     c.window.to = c.granularity === 'day_hour' ? c.window.from : $('wcTo').value.trim();
     if (!/^\d{2}-\d{2}$/.test(c.window.from) || !/^\d{2}-\d{2}$/.test(c.window.to) || c.window.from > c.window.to) {

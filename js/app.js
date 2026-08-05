@@ -1061,24 +1061,31 @@
 
     html += '<div class="param-block"><h3>日前价格情景（权重合计须为 100%；V1.4 起仅日前口径，无实时情景）　<span id="peWSum" style="font-weight:700">当前合计：' + (wSum * 100).toFixed(2) + '%</span></h3>';
     p.scenarios.forEach((s, i) => {
-      html += '<div class="scenario-edit"><div class="head"><b>' + esc(s.name) + '</b>' +
-        '<span class="hint">曲线 8760 点｜原始统调加权均价 ' + num(weightedAvg(p.baseline.curve, s.curve), 1) + ' 元/MWh（报价时按 W_s 标定，仅取形状）</span></div>' +
+      const isDirect = s.priceMode === 'direct';
+      const modeTag = isDirect
+        ? '<span style="background:rgba(63,155,255,.15);color:#3f9bff;padding:1px 6px;border-radius:3px;font-size:11px;margin-left:6px">直接价格（8760 导入，不标定）</span>'
+        : '<span style="background:rgba(255,159,10,.15);color:#ff9f0a;padding:1px 6px;border-radius:3px;font-size:11px;margin-left:6px">比例标定（形状 × W × 因子）</span>';
+      html += '<div class="scenario-edit"><div class="head"><b>' + esc(s.name) + '</b>' + modeTag +
+        '<span class="hint">曲线 8760 点｜原始统调加权均价 ' + num(weightedAvg(p.baseline.curve, s.curve), 1) + ' 元/MWh' + (isDirect ? '（直接价格，原值入算）' : '（报价时按 W_s 标定，仅取形状）') + '</span></div>' +
         '<div class="param-grid">' +
         fld('情景名称', '<input type="text" id="peSname' + i + '" value="' + esc(s.name) + '">') +
         fld('权重（%）', '<input type="number" class="peWeight" data-i="' + i + '" id="peSw' + i + '" min="0" max="100" step="0.01" value="' + (s.weight * 100).toFixed(2) + '">') +
-        fld('价格因子（W_da = W × 因子）', '<input type="number" id="peSf' + i + '" step="0.01" value="' + (s.priceFactor != null ? s.priceFactor : 1) + '">') +
+        fld('价格因子（W_da = W × 因子）' + (isDirect ? '（直接价格下不生效）' : ''), '<input type="number" id="peSf' + i + '" step="0.01" value="' + (s.priceFactor != null ? s.priceFactor : 1) + '"' + (isDirect ? ' disabled' : '') + '>') +
         fld('C分摊（元/MWh）', '<input type="number" id="peSalloc' + i + '" step="0.1" value="' + (s.allocShare || 0) + '">') +
         fld('R返还（元/MWh）', '<input type="number" id="peSref' + i + '" step="0.1" value="' + (s.refundShare || 0) + '">') +
         fld('SR_s 结算调整（元/MWh）', '<input type="number" id="peSsr' + i + '" step="0.1" value="' + (s.sr || 0) + '">') +
         fld('O_s 信用服务（元/MWh）', '<input type="number" id="peSo' + i + '" step="0.1" value="' + (s.o || 0) + '">') +
         '</div>' +
         '<div class="inline gap" style="margin-top:8px">' +
-        '<button class="btn btn-sm" data-curve="' + i + '">替换该情景价格曲线（粘贴 8760 行）</button>' +
+        '<button class="btn btn-sm" data-curve="' + i + '">替换曲线（粘贴 8760 行）</button>' +
+        '<button class="btn btn-sm" data-dltpl="' + i + '">下载导入模板</button>' +
+        '<label class="btn btn-sm" style="cursor:pointer">导入 xlsx<input type="file" data-impscn="' + i + '" accept=".xlsx,.xls" style="display:none"></label>' +
+        (isDirect ? '' : '<button class="btn btn-sm" data-todirect="' + i + '" title="把当前曲线转为直接价格模式（8760 值原样入算，不再按 W 标定）">转为直接价格</button>') +
         (p.scenarios.length > 1 ? '<button class="btn btn-sm btn-danger" data-delscn="' + i + '">删除情景</button>' : '') +
         '</div>' +
         '<div id="curveEditor' + i + '" class="hidden" style="margin-top:8px">' +
         '<textarea rows="5" id="curveText' + i + '" placeholder="粘贴三列：日期、时刻、价格；或单列 8760 个价格（按报价年度时间顺序）"></textarea>' +
-        '<div class="inline gap"><button class="btn btn-sm btn-primary" data-applycurve="' + i + '">应用曲线</button></div></div>' +
+        '<div class="inline gap"><button class="btn btn-sm btn-primary" data-applycurve="' + i + '">应用曲线（按当前模式）</button></div></div>' +
         '</div>';
     });
     html += '<div class="inline gap"><button class="btn btn-sm" id="peAddScn">+ 新增情景（粘贴曲线）</button>' +
@@ -1119,7 +1126,44 @@
       const vals = parseCurveFlexible($('curveText' + i).value);
       if (!vals) return;
       p.scenarios[i].curve = vals;
-      alert('情景「' + p.scenarios[i].name + '」曲线已替换（' + vals.length + ' 点）。记得保存为新版本。');
+      alert('情景「' + p.scenarios[i].name + '」曲线已替换（' + vals.length + ' 点' + (p.scenarios[i].priceMode === 'direct' ? '，直接价格模式' : '，比例标定模式') + '）。记得保存为新版本。');
+      renderParamEditor();
+    }));
+    // 下载日前价格导入模板（8760 框架）
+    document.querySelectorAll('[data-dltpl]').forEach(b => b.addEventListener('click', () => {
+      const wb2 = ScenarioPrice.buildScenarioTemplate(p.meta.year);
+      const out = XLSX.write(wb2, { type: 'array', bookType: 'xlsx' });
+      const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '日前价格导入模板_' + p.meta.year + '.xlsx';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    }));
+    // 导入 xlsx 8760 直接价格 → 该情景设为直接价格模式
+    document.querySelectorAll('[data-impscn]').forEach(inp => inp.addEventListener('change', e => {
+      const i = +inp.dataset.impscn;
+      const f = e.target.files[0];
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        const res = ScenarioPrice.parseScenarioPrice(rd.result, p.meta.year);
+        e.target.value = '';
+        if (!res.curve) { alert('导入失败：' + res.errors.join('；')); return; }
+        const neg = res.negHours > 0 ? '\n注意：含 ' + res.negHours + ' 小时负价（日前市场真实存在，按原值导入）。' : '';
+        if (!confirm('将情景「' + p.scenarios[i].name + '」曲线替换为导入的 8760 直接价格（' + (res.curve.reduce((a, v) => a + v, 0) / res.curve.length).toFixed(2) + ' 元/MWh 均值），并切换为「直接价格」模式（不再按 W 比例标定）。' + neg + '\n\n确认导入？')) return;
+        p.scenarios[i].curve = res.curve;
+        p.scenarios[i].priceMode = 'direct';
+        alert('情景「' + p.scenarios[i].name + '」已切换为直接价格（8760 点' + (res.negHours > 0 ? '，含 ' + res.negHours + ' 小时负价' : '') + '）。记得保存为新版本。');
+        renderParamEditor();
+      };
+      rd.readAsArrayBuffer(f);
+    }));
+    // 比例标定 → 直接价格（用当前曲线原值）
+    document.querySelectorAll('[data-todirect]').forEach(b => b.addEventListener('click', () => {
+      const i = +b.dataset.todirect;
+      if (!confirm('把情景「' + p.scenarios[i].name + '」切换为「直接价格」模式？当前 8760 曲线将原样进入成本计算，不再按 W × 因子标定。')) return;
+      p.scenarios[i].priceMode = 'direct';
       renderParamEditor();
     }));
     document.querySelectorAll('[data-delscn]').forEach(b => b.addEventListener('click', () => {
