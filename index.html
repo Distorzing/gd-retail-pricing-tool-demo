@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=54">
+<link rel="stylesheet" href="css/style.css?v=55">
 </head>
 <body>
 
@@ -100,16 +100,16 @@
             <option value="冰蓄冷">冰蓄冷（f1=1.65 / f2=0.25）</option>
           </select></div>
         <div><label>固定价格 · 电量占比 <span class="req">*</span>（70%~90%，=100%−联动）</label>
-          <div class="inline"><input type="number" id="rtFixedRatio" min="70" max="90" step="0.1" value="85" style="width:90px"> %
+          <div class="inline"><input type="number" id="rtFixedRatio" min="70" max="90" step="0.1" value="90" style="width:90px"> %
           <span class="hint" style="margin:0" id="rtRatioSum">+联动 0% = 100%</span></div></div>
       </div>
       <div class="uc-grid" style="margin-top:10px">
         <div class="uc-title" style="grid-column:1/-1;font-size:12px">市场联动（2026 必选项：总比例 10%~30%；月度联动①/②与现货联动③可同时勾选；③比例 8%~15%）</div>
         <div><label>联动方式</label>
           <div class="inline" style="gap:10px;flex-wrap:wrap">
-            <label style="margin:0"><input type="checkbox" id="rtLink1" checked> ①月度交易综合价</label>
+            <label style="margin:0"><input type="checkbox" id="rtLink1"> ①月度交易综合价</label>
             <label style="margin:0"><input type="checkbox" id="rtLink2"> ②月度集中竞争价</label>
-            <label style="margin:0"><input type="checkbox" id="rtLink3" checked> ③日前市场月度综合价（价格自动取 8760 日前价月度综合）</label>
+            <label style="margin:0"><input type="checkbox" id="rtLink3" checked> ③日前现货联动（8%~15%，价格自动取 8760 日前价月度综合）</label>
           </div></div>
         <div id="rtLinkRows" style="grid-column:1/-1"></div>
       </div>
@@ -305,20 +305,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=54"></script>
-<script src="js/vendor/xlsx.full.min.js?v=54"></script>
-<script src="js/calc.js?v=54"></script>
-<script src="js/retail.js?v=54"></script>
-<script src="js/breakeven.js?v=54"></script>
-<script src="js/validate.js?v=54"></script>
-<script src="js/xlsx-import.js?v=54"></script>
-<script src="js/store.js?v=54"></script>
-<script src="js/charts.js?v=54"></script>
-<script src="js/export.js?v=54"></script>
-<script src="js/wc-template.js?v=54"></script>
-<script src="js/scenario-price.js?v=54"></script>
-<script src="js/wc-import8760.js?v=54"></script>
-<script src="js/wholesale.js?v=54"></script>
-<script src="js/app.js?v=54"></script>
+<script src="js/data.js?v=55"></script>
+<script src="js/vendor/xlsx.full.min.js?v=55"></script>
+<script src="js/calc.js?v=55"></script>
+<script src="js/retail.js?v=55"></script>
+<script src="js/breakeven.js?v=55"></script>
+<script src="js/validate.js?v=55"></script>
+<script src="js/xlsx-import.js?v=55"></script>
+<script src="js/store.js?v=55"></script>
+<script src="js/charts.js?v=55"></script>
+<script src="js/export.js?v=55"></script>
+<script src="js/wc-template.js?v=55"></script>
+<script src="js/scenario-price.js?v=55"></script>
+<script src="js/wc-import8760.js?v=55"></script>
+<script src="js/wholesale.js?v=55"></script>
+<script src="js/app.js?v=55"></script>
 </body>
 </html>
