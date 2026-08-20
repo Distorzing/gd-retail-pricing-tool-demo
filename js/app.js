@@ -317,8 +317,11 @@
     $('validateResult').classList.remove('hidden');
 
     if (v.ok) {
-      statusEl.innerHTML = '<div class="status-ok">✓ 校验通过：' + v.stats.count + ' 点完整、唯一、非负（' +
-        state.params.meta.year + ' 年 8760 点）</div>';
+      const partial = v.stats.partial;
+      statusEl.innerHTML = '<div class="status-ok">✓ 校验通过：' + (partial
+        ? '部分连续曲线（' + (v.stats.count - v.missingCount) + ' 点有数据，窗口外 ' + v.missingCount + ' 小时已补 0）'
+        : v.stats.count + ' 点完整、唯一、非负（' + state.params.meta.year + ' 年 8760 点）') + '</div>' +
+        (partial ? '<div class="status-warn">⚠ 部分曲线：请配合「年内新增」签约模式测算（窗口外电量按 0 计）</div>' : '');
 
       // 峰平谷电量聚合预览（零售侧收入输入提示）
       try {
