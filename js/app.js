@@ -26,6 +26,7 @@
     bindExportSection();
     bindParamsSection();
     renderSnapshots();
+    loadCurveHistory();   // 刷新自动回填上次曲线
     const ms = $('selMonth');
     for (let m = 1; m <= 12; m++) ms.insertAdjacentHTML('beforeend', '<option value="' + m + '">' + m + ' 月</option>');
     ms.addEventListener('change', renderTypicalDay);
@@ -152,6 +153,7 @@
             const r = XlsxImport.workbookToTSV(rd.result);
             $('txtCurve').value = r.tsv;
             invalidateValidation();
+            saveCurveHistory();
             statusEl.insertAdjacentHTML('beforeend', '<div class="status-ok" style="margin-top:6px">已解析工作表「' + r.sheetName + '」：' + r.rowCount + ' 行（' + r.mapping +
               (r.skipped ? '，跳过 ' + r.skipped + ' 行' : '') + '），请点击「校验曲线」（单位按 MWh）</div>');
           } catch (err) { alert('xlsx 解析失败：' + err.message); }
@@ -164,7 +166,7 @@
       rd.onload = () => { $('txtCurve').value = rd.result; invalidateValidation(); };
       rd.readAsText(f, 'utf-8');
     });
-    $('txtCurve').addEventListener('input', invalidateValidation);
+    $('txtCurve').addEventListener('input', () => { invalidateValidation(); saveCurveHistory(); });
     document.querySelectorAll('input[name=inputMode]').forEach(r => r.addEventListener('change', () => {
       const simple = (document.querySelector('input[name=inputMode]:checked') || {}).value === 'simple';
       $('simpleArea').classList.toggle('hidden', !simple);
@@ -1201,7 +1203,7 @@
       '<div class="inline gap"><button class="btn btn-sm btn-primary" id="peApplyAddScn">添加</button></div></div>' +
       '</div>';
 
-    html += '<div class="actions"><button class="btn btn-primary" id="peSave">保存为新版本并启用</button>' +
+    html += '<div class="actions"><button class="btn btn-primary" id="peSave">保存为新版本并启用</button><span id="liveHint" class="hint" style="margin-left:10px"></span></div><div class="actions" style="margin-top:-8px">' +
       '<span class="hint">保存后生成新版本号，当前版本与历史版本保留，报价快照将记录新版本号。</span></div>';
 
     $('paramEditor').innerHTML = html;
@@ -1305,6 +1307,26 @@
       });
     };
     apprBtn('peApprTh', by => { state.params.costModel.riskThresholds.approval = { ok: true, by, at: Store.now() }; });
+
+    // ============ 即改即用：关键参数输入即时生效当前版本（无需保存新版本） ============
+    const cm = p.costModel || {};
+    const live = (id, apply) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('change', () => { apply(el); invalidateResult(); liveHint(); });
+      el.addEventListener('input', () => { apply(el); invalidateResult(); });
+    };
+    const liveHint = () => {
+      const el = $('liveHint');
+      if (el) { el.textContent = '✓ 已即时生效（未保存版本）；刷新前如需保留请「保存为新版本」'; el.style.color = 'var(--green)'; setTimeout(() => { el.textContent = ''; }, 3000); }
+    };
+    live('peOps', el => { cm.opsPerMwh = Number(el.value) || 0; });
+    live('peOversell', el => { cm.oversellAsLoss = el.value === 'loss'; });
+    if (p.billLayer && p.billLayer.item) {
+      for (let m = 0; m < 12; m++) live('peBillM' + m, el => { p.billLayer.item.monthly[m] = Number(el.value) || 0; });
+      live('peBillBearer', el => { p.billLayer.item.bearer = el.value; });
+    }
+    live('peR', el => { p.defaults.coverageRatio = (Number(el.value) || 0) / 100; });
   }
 
   /** 解析 8760 曲线：三列（日期/时刻/值）或单列值；返回 number[8760] 或 null */

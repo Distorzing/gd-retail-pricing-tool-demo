@@ -110,6 +110,7 @@ miniP.baseline = { curve: new Array(N).fill(1) };   // 归一化后 g=1/8760 均
 miniP.wholesaleCurves = [];
 miniP.scenarios = [{ id: 'S1', name: '单情景', weight: 1, priceFactor: 1, sr: 0, o: 0, allocShare: 0, refundShare: 0, curve: flatCurve }];
 miniP.costModel.reservePerMwh = 0;
+miniP.costModel.opsPerMwh = 0;   // 本算例不含服务费（情景 o=0 且全局 0）
 miniP.billLayer = { mode: 'monthly_allocation', item: { bearer: 'pass', monthly: new Array(12).fill(0) } };   // 到户层客户承担 → 不计入成本（本算例不含分摊）
 const rr = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: miniP });
 // Clt=0.9×372=334.8；Cda=0.1×372=37.2 → C总=372
