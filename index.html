@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=52">
+<link rel="stylesheet" href="css/style.css?v=53">
 </head>
 <body>
 
@@ -73,6 +73,22 @@
         </div>
         <div class="hint" id="signModeHint">年度用户：全年 01-01~12-31 窗口测算（现状）</div>
       </div>
+      <div class="form-row">
+        <label>零售套餐模式 <span class="req">*</span>（2026 新规）</label>
+        <div class="inline" style="gap:14px;flex-wrap:wrap">
+          <label style="margin:0;font-weight:400"><input type="radio" name="planMode" value="linkage" checked> 固定价格+联动价格</label>
+          <label style="margin:0;font-weight:400"><input type="radio" name="planMode" value="fair"> 平价套餐（批发均价+浮动费用）</label>
+        </div>
+        <div class="hint" id="planModeHint">固定+联动：固定 372~554，联动总比例 10%~30%（现货联动 8%~15%），2026 不签浮动费用（可加煤电联动）。平价套餐：全电量按「月批发均价+浮动费用 0~5 元/MWh」。</div>
+      </div>
+      <div id="fairArea" class="hidden form-row">
+        <div class="uc-grid">
+          <div><label>月批发均价（元/MWh）</label><input type="number" id="fairWholesaleAvg" min="0" step="0.01" value="380"></div>
+          <div><label>浮动费用（元/MWh，0~5）</label><div class="inline"><input type="number" id="fairFloat" min="0" max="5" step="0.01" value="3" style="width:90px">（0.005 元/度上限）</div></div>
+        </div>
+        <div class="hint">平价套餐=批发均价+浮动费；风控条款自动适用（平段价超批发均价 15% 按其 115% 结算、低于 20% 按 80%）。</div>
+      </div>
+      <div id="linkageArea">
       <div class="uc-title">零售侧收入结构（合同条款，依据零售侧收入设计文档 v1.0）</div>
       <div class="uc-grid">
         <div><label>用户类型 <span class="req">*</span>（决定峰谷系数 f1/f2）</label>
@@ -126,6 +142,7 @@
         <div><label>补充交易价格（元/MWh）</label><input type="number" id="rtGreenSupPrice" min="0" step="0.01" value="0"></div>
       </div>
       <div class="hint" id="rtUsageAgg" style="margin:8px 0 0">峰/平/谷电量将在校验客户曲线后自动聚合显示（时段：峰 10-11、14-18；谷 0-7；其余为平）</div>
+      </div>
       <div class="form-row">
         <label>客户用电输入方式</label>
         <div class="inline" style="gap:14px;flex-wrap:wrap">
@@ -288,20 +305,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=52"></script>
-<script src="js/vendor/xlsx.full.min.js?v=52"></script>
-<script src="js/calc.js?v=52"></script>
-<script src="js/retail.js?v=52"></script>
-<script src="js/breakeven.js?v=52"></script>
-<script src="js/validate.js?v=52"></script>
-<script src="js/xlsx-import.js?v=52"></script>
-<script src="js/store.js?v=52"></script>
-<script src="js/charts.js?v=52"></script>
-<script src="js/export.js?v=52"></script>
-<script src="js/wc-template.js?v=52"></script>
-<script src="js/scenario-price.js?v=52"></script>
-<script src="js/wc-import8760.js?v=52"></script>
-<script src="js/wholesale.js?v=52"></script>
-<script src="js/app.js?v=52"></script>
+<script src="js/data.js?v=53"></script>
+<script src="js/vendor/xlsx.full.min.js?v=53"></script>
+<script src="js/calc.js?v=53"></script>
+<script src="js/retail.js?v=53"></script>
+<script src="js/breakeven.js?v=53"></script>
+<script src="js/validate.js?v=53"></script>
+<script src="js/xlsx-import.js?v=53"></script>
+<script src="js/store.js?v=53"></script>
+<script src="js/charts.js?v=53"></script>
+<script src="js/export.js?v=53"></script>
+<script src="js/wc-template.js?v=53"></script>
+<script src="js/scenario-price.js?v=53"></script>
+<script src="js/wc-import8760.js?v=53"></script>
+<script src="js/wholesale.js?v=53"></script>
+<script src="js/app.js?v=53"></script>
 </body>
 </html>

@@ -14,18 +14,18 @@ const r = R.calcRetail(R.demoInput(), R.demoUsage());
 ok('固定电费 = 44.6472 万（200×0.9×520×1.7 + 500×0.9×520 + 300×0.9×520×0.38）', near(r.energy.fixed.total, 446472, 1), r.energy.fixed.total);
 ok('联动电费 = 5.1516 万（方式③10%@540）', near(r.energy.linked.total, 51516, 1));
 ok('煤电电费 = 2.5758 万（trunc(106/100)=1）', near(r.energy.coal.total, 25758, 1));
-ok('浮动电费 = 1.2 万（1000×12）', near(r.energy.floatFee.total, 12000, 1));
+ok('浮动费用 = 0（2026 新规禁用）', !r.energy.floatFee, '浮动费应不存在');
 ok('峰谷平衡补贴 8.6118 万', near(r.peakValley.valleySubsidy, 86118, 1));
 ok('峰谷平衡惩罚 6.482 万', near(r.peakValley.peakPenalty, 64820, 1));
 ok('峰谷平衡净额 = +2.1298 万', near(r.peakValley.net, 21298, 1));
 ok('绿电合计 = 0.1 万（100×10）', near(r.green.total, 1000, 1));
-ok('★ 零售收入 = 55.8044 万（PPT 分项舍入和=55.70，文档§8 合计按未舍入值）', near(r.grandTotal, 558044, 2), (r.grandTotal / 10000).toFixed(4));
-ok('度电单价 = 0.5580 元/kWh', near(r.unitPriceYuanPerKwh, 0.55804, 1e-5));
+ok('★ 零售收入 = 54.6044 万（2026 规则：去浮动费）', near(r.grandTotal, 546044, 2), (r.grandTotal / 10000).toFixed(4));
+ok('度电单价 = 0.5460 元/kWh', near(r.unitPriceYuanPerKwh, 0.54604, 1e-5));
 ok('无校验错误', r.errors.length === 0, JSON.stringify(r.errors));
 
 console.log('\n[2] 盈亏平衡求解');
 // 成本 558044 元 → 盈亏平衡固定平段价应 = 520（收入=成本）
-const be = R.solveBreakEven(R.demoInput(), R.demoUsage(), 558044 / 1000);
+const be = R.solveBreakEven(R.demoInput(), R.demoUsage(), 546044 / 1000);
 ok('成本=收入时 盈亏平衡平段价=520', near(be.flatPrice, 520, 0.01), be.flatPrice);
 ok('代回利润=0', Math.abs(be.checkProfit) < 1, be.checkProfit);
 ok('K = (200×1.7+500+300×0.38)/1000 = 0.954', near(be.K, 0.954, 1e-9));
@@ -43,6 +43,32 @@ bad4.link.modes = [{ type: 3, ratio: 0.3, flatPrice: 540 }]; bad4.fixed.ratio = 
 ok('方式③占比 30% > 20% → 拦截', R.calcRetail(bad4, R.demoUsage()).errors.length > 0);
 const bad5 = JSON.parse(JSON.stringify(R.demoInput())); bad5.coal.floatPrice = 80;
 ok('煤电浮动 80 > 50 → 拦截', R.calcRetail(bad5, R.demoUsage()).errors.length > 0);
+
+console.log('\n[3b] 2026 新规校验');
+// 联动总比例 > 30% → 拦截
+const b0 = JSON.parse(JSON.stringify(R.demoInput()));
+b0.fixed.ratio = 0.65; b0.link.modes = [{ type: 1, ratio: 0.35, flatPrice: 540 }];
+ok('联动总比例 35% > 30% → 拦截', R.calcRetail(b0, R.demoUsage()).errors.some(e => e.indexOf('30%') >= 0));
+// 现货联动 < 8% → 拦截
+const b0b = JSON.parse(JSON.stringify(R.demoInput()));
+b0b.fixed.ratio = 0.92; b0b.link.modes = [{ type: 3, ratio: 0.05, flatPrice: 540 }];
+ok('现货联动 5% < 8% → 拦截', R.calcRetail(b0b, R.demoUsage()).errors.some(e => e.indexOf('下限 8%') >= 0));
+// 现货联动 > 15% → 拦截
+const b0c = JSON.parse(JSON.stringify(R.demoInput()));
+b0c.fixed.ratio = 0.80; b0c.link.modes = [{ type: 3, ratio: 0.20, flatPrice: 540 }];
+ok('现货联动 20% > 15% → 拦截', R.calcRetail(b0c, R.demoUsage()).errors.some(e => e.indexOf('上限 15%') >= 0));
+// 固定+联动 + 浮动费 → 拦截（2026）
+const b0d = JSON.parse(JSON.stringify(R.demoInput()));
+b0d.floatFee = { enabled: true, price: 3 };
+ok('固定+联动+浮动费 → 拦截（2026 新规）', R.calcRetail(b0d, R.demoUsage()).errors.some(e => e.indexOf('不再签订浮动费用') >= 0));
+// 平价套餐 + 浮动费 3（0~5 合法）
+const b0e = JSON.parse(JSON.stringify(R.demoInput()));
+b0e.planMode = 'fair'; b0e.wholesaleAvg = 380; b0e.floatFee = { enabled: true, price: 3 };
+ok('平价套餐+浮动费 3 → 合法', R.calcRetail(b0e, R.demoUsage()).errors.length === 0);
+// 平价套餐 + 浮动费 6 > 5 → 拦截
+const b0f = JSON.parse(JSON.stringify(R.demoInput()));
+b0f.planMode = 'fair'; b0f.wholesaleAvg = 380; b0f.floatFee = { enabled: true, price: 6 };
+ok('平价套餐+浮动费 6 > 5 → 拦截', R.calcRetail(b0f, R.demoUsage()).errors.some(e => e.indexOf('超出') >= 0));
 
 console.log('\n[4] 边界用例');
 // 非深圳商业 f1=f2=1 → 峰谷平衡净额 0

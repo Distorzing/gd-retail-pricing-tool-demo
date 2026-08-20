@@ -23,16 +23,35 @@
     },
     TOU_PERIODS: { peak: '10-11、14-18', flat: '8-9、12-13、19-23', valley: '0-7' },
     FIXED_PRICE_MIN: 372, FIXED_PRICE_MAX: 554,    // 元/MWh（0.372~0.554 元/kWh）
-    LINK_MIN_RATIO: 0.10,                          // 联动比例合计下限 10%
-    LINK_MODE3_MAX_RATIO: 0.20,                    // 方式③占比上限 20%
+    LINK_MIN_RATIO: 0.10, LINK_MAX_RATIO: 0.30,     // 联动总比例 10%~30%（2026 新规）
+    LINK_SPOT_MIN_RATIO: 0.08, LINK_SPOT_MAX_RATIO: 0.15,   // 联动现货（日前月度综合价）8%~15%
     COAL_FLOAT_MIN: 0, COAL_FLOAT_MAX: 50,         // 元/MWh
-    FLOAT_FEE_MIN: 0, FLOAT_FEE_MAX: 15,           // 元/MWh
+    FLOAT_FEE_MIN: 0, FLOAT_FEE_MAX: 5,             // 浮动费用（仅平价套餐，0~5 元/MWh = 0~0.005 元/kWh，2026 新规）
     PV_REF_PRICE: 463,                             // 峰谷平衡市场参考价 元/MWh（0.463 元/kWh）
     GREEN_FIXED_PRICE_MAX: 50,                     // 元/MWh
     GREEN_VOLUME_CAP: 1.2,                         // ≤ 实际用电量×1.2
     GREEN_ASSESS_COEF_MAX: 0.2,
     CECI_ROUND_MODE: 'trunc'                       // trunc | floor | round（PPT 算例 (940−834)/100=1.06→1）
   };
+
+  /**
+   * 市场风控条款（2026 新规§3）：平段结算价 vs 结算月批发均价
+   *  - 高于批发均价 15% 以上 → 用户只付 批发均价×115%（超出部分售电公司承担）
+   *  - 低于批发均价 20% 以上 → 用户付 批发均价×80%（低于部分售电公司享有）
+   * @param Pping 平段结算价（元/MWh） @param wholesaleAvg 月批发均价（元/MWh）
+   */
+  function riskGuard(Pping, wholesaleAvg) {
+    if (!(wholesaleAvg > 0) || !(Pping > 0)) return { applied: false, Pping, note: '未触发（无批发均价数据）' };
+    if (Pping > wholesaleAvg * 1.15) {
+      return { applied: true, type: 'cap', Pping: wholesaleAvg * 1.15, saving: Pping - wholesaleAvg * 1.15,
+        note: '平段价高于批发均价 15% → 用户按批发均价×115% 结算，超出部分售电公司承担（用户可单方解约）' };
+    }
+    if (Pping < wholesaleAvg * 0.80) {
+      return { applied: true, type: 'floor', Pping: wholesaleAvg * 0.80, gain: wholesaleAvg * 0.80 - Pping,
+        note: '平段价低于批发均价 20% → 用户按批发均价×80% 结算，低于部分售电公司享有' };
+    }
+    return { applied: false, Pping, note: '未触发（批发均价×80% ≤ 平段价 ≤ ×115%）' };
+  }
 
   /** 校验 + 计算（一个入口；errors 非空时调用方应阻止使用结果） */
   function calcRetail(input, usage) {
@@ -45,6 +64,36 @@
     // —— 用户类型与系数 ——
     const tou = CONFIG.TOU_TABLE[input.userType] || CONFIG.TOU_TABLE['非深圳工业'];
     const k = { peak: tou.f1, flat: 1, valley: tou.f2 };
+
+    // ============ 平价套餐（2026 新规§2）：批发均价 + 浮动费用，全电量 ============
+    // input.planMode='fair' + wholesaleAvg（元/MWh）+ floatFee{enabled, price 0~5}
+    if (input.planMode === 'fair') {
+      const wa = Number(input.wholesaleAvg) || 0;
+      if (!(wa > 0)) errors.push('平价套餐：需填写月批发均价（元/MWh）');
+      const fp = input.floatFee && input.floatFee.enabled ? Number(input.floatFee.price) || 0 : 0;
+      if (fp < CONFIG.FLOAT_FEE_MIN || fp > CONFIG.FLOAT_FEE_MAX) errors.push('浮动费用 ' + fp + ' 超出 [0, 5] 元/MWh');
+      if (errors.length) return { errors };
+      // 平段 = 批发均价 + 浮动费；峰谷按系数
+      const Pping = wa + fp;
+      const F = [];
+      ['peak', 'flat', 'valley'].forEach(seg => {
+        F.push({ comp: '平价套餐·' + (seg === 'peak' ? '峰' : seg === 'flat' ? '平' : '谷'), seg,
+          formula: segUsage2(seg) + ' MWh × (' + wa + ' + ' + fp + ') × ' + k[seg] + ' = ' + yuan(segUsage2(seg) * Pping * k[seg]) + ' 元' });
+      });
+      const total = Qt * Pping;   // 峰平谷加权 = Pping × K×Qt… 全电量×(均价+浮动)×1（平价套餐均价口径按平段电量价，峰谷仍按系数）
+      const grand = (Qp * Pping * k.peak) + (Qf * Pping) + (Qv * Pping * k.valley);
+      const guard = riskGuard(Pping, wa);
+      return {
+        planMode: 'fair', usage: { peak: Qp, flat: Qf, valley: Qv, total: Qt }, tou, k,
+        energy: { fixed: { seg: { peak: 0, flat: 0, valley: 0 }, total: 0 }, linked: { seg: { peak: 0, flat: 0, valley: 0 }, total: 0 }, total: grand },
+        peakValley: { valleySubsidy: 0, peakPenalty: 0, net: 0 },
+        green: { total: 0 },
+        grandTotal: grand, unitPrice: grand / Qt, unitPriceYuanPerKwh: grand / Qt / 1000,
+        riskGuard: guard, errors: [], formulas: F,
+        note: '平价套餐：批发均价 ' + wa + ' + 浮动费 ' + fp + ' 元/MWh；风控条款：' + guard.note
+      };
+      function segUsage2(seg) { return seg === 'peak' ? Qp : seg === 'flat' ? Qf : Qv; }
+    }
 
     // —— 校验：电能量 ——
     const fixedRatio = Number(input.fixed && input.fixed.ratio) || 0;
@@ -64,9 +113,14 @@
     if (modes.length && linkRatioSum < CONFIG.LINK_MIN_RATIO - 1e-9) {
       errors.push('联动总占比 ' + pct(linkRatioSum) + ' 低于下限 10%');
     }
+    if (linkRatioSum > CONFIG.LINK_MAX_RATIO + 1e-9) {
+      errors.push('联动总占比 ' + pct(linkRatioSum) + ' 超过上限 30%（2026 新规）');
+    }
     const m3 = modes.find(m => m.type === 3);
-    if (m3 && (Number(m3.ratio) || 0) > CONFIG.LINK_MODE3_MAX_RATIO + 1e-9) {
-      errors.push('联动方式③占比 ' + pct(m3.ratio) + ' 超过上限 20%');
+    if (m3) {
+      const r3 = Number(m3.ratio) || 0;
+      if (r3 < CONFIG.LINK_SPOT_MIN_RATIO - 1e-9) errors.push('联动现货（方式③）占比 ' + pct(r3) + ' 低于下限 8%（2026 新规）');
+      if (r3 > CONFIG.LINK_SPOT_MAX_RATIO + 1e-9) errors.push('联动现货（方式③）占比 ' + pct(r3) + ' 超过上限 15%（2026 新规）');
     }
     modes.forEach(m => { if (!((Number(m.flatPrice) || 0) > 0)) errors.push('联动方式' + m.type + ' 平段联动价未填写'); });
 
@@ -83,7 +137,10 @@
     if (ff.enabled) {
       const p = Number(ff.price) || 0;
       if (p < CONFIG.FLOAT_FEE_MIN || p > CONFIG.FLOAT_FEE_MAX) {
-        errors.push('浮动电费单价 ' + p + ' 超出 [0, 15] 元/MWh');
+        errors.push('浮动费用 ' + p + ' 超出 [0, 5] 元/MWh（2026 新规：仅平价套餐、上限 0.005 元/kWh）');
+      }
+      if (input.planMode !== 'fair' && modes.length) {
+        errors.push('「固定价格+联动价格」模式 2026 年不再签订浮动费用（新规）；浮动费用仅适用于平价套餐');
       }
     }
 
@@ -224,7 +281,7 @@
       fixed: { ratio: 0.9, flatPrice: 520 },
       link: { modes: [{ type: 3, ratio: 0.1, flatPrice: 540 }] },
       coal: { enabled: true, ceciSign: 834, ceciSettle: 940, floatPrice: 30 },
-      floatFee: { enabled: true, price: 12 },
+      floatFee: { enabled: false, price: 0 },   // 2026 新规：固定+联动模式不签浮动费（PPT 原算例的 12 元/MWh 已按新规移除）
       green: { enabled: true, volumeMode: 'ratio', ratio: 1.0, actualGreenUsage: 100,
         fixedRatio: 1.0, fixedPrice: 10, linkRatio: 0, linkEnvPrice: null,
         priority: 'A', assessMode: 'none', assessCoef: 0, supplement: { volume: 0, price: 0 } }
@@ -232,5 +289,5 @@
   }
   const demoUsage = () => ({ peak: 200, flat: 500, valley: 300 });
 
-  return { CONFIG, calcRetail, solveBreakEven, demoInput, demoUsage };
+  return { CONFIG, calcRetail, solveBreakEven, riskGuard, demoInput, demoUsage };
 });

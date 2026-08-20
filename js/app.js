@@ -234,6 +234,15 @@
 
   /** 零售侧输入联动：方式互斥/行渲染/开关启停/占比合计/峰平谷聚合提示 */
   function bindRetailInputs() {
+    document.querySelectorAll('input[name=planMode]').forEach(r => r.addEventListener('change', () => {
+      const fair = (document.querySelector('input[name=planMode]:checked') || {}).value === 'fair';
+      $('fairArea').classList.toggle('hidden', !fair);
+      $('linkageArea').classList.toggle('hidden', fair);
+      $('planModeHint').textContent = fair
+        ? '平价套餐：全电量按月批发均价+浮动费用（0~5 元/MWh）；峰谷仍按用户类型系数；风控条款自动适用。'
+        : '固定+联动：固定 372~554，联动总比例 10%~30%（现货联动 8%~15%），2026 不签浮动费用（可加煤电联动）。';
+      invalidateResult();
+    }));
     const renderLinkRows = () => {
       const box = $('rtLinkRows');
       const modes = [['rtLink1', 1, '①月度交易综合价'], ['rtLink2', 2, '②月度集中竞争综合价'], ['rtLink3', 3, '③日前市场月度综合价']];
@@ -465,6 +474,17 @@
       if (be.flatPrice != null && be.flatPrice > 0) { chkInput.fixed.flatPrice = be.flatPrice; }
       else { chkInput.fixed.flatPrice = rtInput.fixed.flatPrice; t.breakEvenMiss = be.reason || null; }
       t.retail = RetailCalc.calcRetail(chkInput, pvPre.usage);
+      // 市场风控条款（2026 新规§3）：平段结算价 vs 批发均价（用日前价按客户电量加权近似）
+      {
+        const keys = state.validation.series.keys;
+        const da = state.params.scenarios[0].curve;
+        let ws = 0, qs = 0;
+        for (let t2 = 0; t2 < keys.length; t2++) { ws += qMWh[t2] * da[t2]; qs += qMWh[t2]; }
+        const wholesaleAvg = qs > 0 ? ws / qs : 0;
+        const beP = be.flatPrice != null ? be.flatPrice : 0;
+        t.retail.riskGuard = RetailCalc.riskGuard(beP, wholesaleAvg);
+        t.retail.wholesaleAvg = wholesaleAvg;
+      }
       // 三档价 = 盈亏平衡平段价（收入=成本+利润垫 M 反解）；该档零售利润应 = M（元/MWh）
       t.profitPerMwh = t.M;
       t.trialPrice = null;
@@ -527,6 +547,17 @@
         });
       }
     });
+    const planMode = (document.querySelector('input[name=planMode]:checked') || {}).value || 'linkage';
+    if (planMode === 'fair') {
+      return {
+        planMode: 'fair', userType: $('rtUserType').value,
+        wholesaleAvg: Number($('fairWholesaleAvg').value) || 0,
+        floatFee: { enabled: true, price: Number($('fairFloat').value) || 0 },
+        fixed: { ratio: 1, flatPrice: 0 }, link: { modes: [] },
+        coal: { enabled: false, ceciSign: 0, ceciSettle: 0, floatPrice: 0 },
+        green: { enabled: false, volumeMode: 'ratio', ratio: 1, actualGreenUsage: 0, fixedRatio: 1, fixedPrice: 0, linkRatio: 0, linkEnvPrice: 0, priority: 'A', assessMode: 'none', assessCoef: 0, supplement: { volume: 0, price: 0 } }
+      };
+    }
     const greenOn = $('rtGreenOn').checked;
     return {
       userType: $('rtUserType').value,
@@ -639,6 +670,7 @@
         '<div class="tier-pvg"><span>峰 <b>' + num(tou.f1 * pPing) + '</b></span><span>平 <b>' + num(pPing) + '</b></span><span>谷 <b>' + num(tou.f2 * pPing) + '</b></span></div>' +
         '<div class="equiv">零售等效均价 ' + num(equiv) + '（' + num(equiv / 1000, 4) + ' 元/度）· 全成本 ' + num(t.equiv) + '</div>' +
         feeLine +
+        (t.retail && t.retail.riskGuard ? '<div class="tier-k" style="color:' + (t.retail.riskGuard.applied ? 'var(--orange)' : 'var(--muted)') + '">🛡 风控条款：' + esc(t.retail.riskGuard.note) + (t.retail.riskGuard.applied ? '（结算平段价=' + num(t.retail.riskGuard.Pping) + '）' : '') + '</div>' : '') +
         '<div class="tier-k">' + (be.K != null ? 'K=' + num(be.K, 4) + ' · ' : '') + 'f1=' + tou.f1 + ' / f2=' + tou.f2 + alphaTxt +
         (be.flatPrice == null && be.reason ? ' · ⚠ ' + esc(be.reason) : '') + '</div>';
       card.innerHTML =
