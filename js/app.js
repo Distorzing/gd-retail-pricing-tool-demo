@@ -21,7 +21,13 @@
   /* ================= 初始化 ================= */
   function init() {
     bindTabs();
-    refreshVersionSelect(BUILTIN_PARAMS.meta.versionId);
+    // 优先恢复上次工作参数（即改即用保存的当前值）；否则用内置默认
+    const workP = loadWorkParams();
+    if (workP) {
+      state.params = workP;
+      state.activeVersionId = workP.meta.versionId;
+    }
+    refreshVersionSelect(state.activeVersionId || BUILTIN_PARAMS.meta.versionId);
     bindInputSection();
     bindExportSection();
     bindParamsSection();
@@ -89,8 +95,28 @@
         '<option value="' + esc(v.meta.versionId) + '">' + esc(v.meta.versionName) + tag + '｜' + esc(v.meta.versionId) + '</option>');
     });
     sel.value = selectId || versions()[0].meta.versionId;
-    loadVersion(sel.value);
+    // 有工作参数（即改即用恢复的）时，不覆盖；只更新版本徽章显示
+    if (state.params && state.activeVersionId === sel.value) {
+      const v = state.params;
+      $('activeVersionBadge').textContent = '参数版本 ' + v.meta.versionId + '（工作值）';
+    } else {
+      loadVersion(sel.value);
+    }
     sel.onchange = () => { loadVersion(sel.value); invalidateResult(); };
+  }
+
+  /** 当前工作参数自动持久化（即改即用时存，刷新恢复；非固化，只是保留你正在用的值） */
+  const WORK_KEY = 'pt-work-params';
+  function saveWorkParams() {
+    try { localStorage.setItem(WORK_KEY, JSON.stringify(state.params)); } catch (e) { /* 忽略 */ }
+  }
+  function loadWorkParams() {
+    try {
+      const raw = localStorage.getItem(WORK_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      return (p && p.meta && p.meta.versionId) ? p : null;
+    } catch (e) { return null; }
   }
 
   function loadVersion(versionId) {
@@ -1313,8 +1339,8 @@
     const live = (id, apply) => {
       const el = $(id);
       if (!el) return;
-      el.addEventListener('change', () => { apply(el); invalidateResult(); liveHint(); });
-      el.addEventListener('input', () => { apply(el); invalidateResult(); });
+      el.addEventListener('change', () => { apply(el); invalidateResult(); saveWorkParams(); liveHint(); });
+      el.addEventListener('input', () => { apply(el); invalidateResult(); saveWorkParams(); });
     };
     const liveHint = () => {
       const el = $('liveHint');
