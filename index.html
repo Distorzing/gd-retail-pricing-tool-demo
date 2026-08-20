@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=56">
+<link rel="stylesheet" href="css/style.css?v=57">
 </head>
 <body>
 
@@ -120,24 +120,6 @@
         <div><label>结算月 CECI（元/吨）</label><input type="number" id="rtCeciSettle" step="1" value="940" disabled></div>
         <div><label>煤电浮动单价（元/MWh，0-50）</label><input type="number" id="rtCoalPrice" min="0" max="50" step="0.01" value="30" disabled></div>
 
-        <div><label>绿电环境价值</label>
-          <div class="inline"><label style="margin:0"><input type="checkbox" id="rtGreenOn"> 启用</label></div></div>
-      </div>
-      <div id="rtGreenArea" class="uc-grid hidden" style="margin-top:6px">
-        <div class="uc-title" style="grid-column:1/-1;font-size:12px">绿电环境价值（可选）</div>
-        <div><label>交易电量模式</label>
-          <select id="rtGreenVolMode"><option value="ratio">按用电量比例</option><option value="fixed">按电量约定</option></select></div>
-        <div><label>约定比例（%，0-120）</label><input type="number" id="rtGreenRatio" min="0" max="120" step="0.1" value="100"></div>
-        <div><label>约定电量（MWh）</label><input type="number" id="rtGreenVolume" min="0" step="0.1" value="0" disabled></div>
-        <div><label>绿电实际用电量（MWh）</label><input type="number" id="rtGreenUsage" min="0" step="0.1" value="0"></div>
-        <div><label>固定价占比（%）</label><input type="number" id="rtGreenFRatio" min="0" max="100" step="0.1" value="100"></div>
-        <div><label>绿电固定价格（元/MWh，0-50）</label><input type="number" id="rtGreenFPrice" min="0" max="50" step="0.01" value="10"></div>
-        <div><label>联动占比（%）</label><input type="number" id="rtGreenLRatio" min="0" max="100" step="0.1" value="0"></div>
-        <div><label>环境价值均价（元/MWh）</label><input type="number" id="rtGreenLPrice" min="0" step="0.01" value="0"></div>
-        <div><label>考核方式</label><select id="rtGreenAssessMode"><option value="none">无</option><option value="month">按月</option><option value="contract">按合同有效期</option></select></div>
-        <div><label>考核系数（0-0.2）</label><input type="number" id="rtGreenAssessCoef" min="0" max="0.2" step="0.01" value="0"></div>
-        <div><label>补充交易电量（MWh）</label><input type="number" id="rtGreenSupVol" min="0" step="0.1" value="0"></div>
-        <div><label>补充交易价格（元/MWh）</label><input type="number" id="rtGreenSupPrice" min="0" step="0.01" value="0"></div>
       </div>
       <div class="hint" id="rtUsageAgg" style="margin:8px 0 0">峰/平/谷电量将在校验客户曲线后自动聚合显示（时段：峰 10-11、14-18；谷 0-7；其余为平）</div>
       </div>
@@ -303,20 +285,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=56"></script>
-<script src="js/vendor/xlsx.full.min.js?v=56"></script>
-<script src="js/calc.js?v=56"></script>
-<script src="js/retail.js?v=56"></script>
-<script src="js/breakeven.js?v=56"></script>
-<script src="js/validate.js?v=56"></script>
-<script src="js/xlsx-import.js?v=56"></script>
-<script src="js/store.js?v=56"></script>
-<script src="js/charts.js?v=56"></script>
-<script src="js/export.js?v=56"></script>
-<script src="js/wc-template.js?v=56"></script>
-<script src="js/scenario-price.js?v=56"></script>
-<script src="js/wc-import8760.js?v=56"></script>
-<script src="js/wholesale.js?v=56"></script>
-<script src="js/app.js?v=56"></script>
+<script src="js/data.js?v=57"></script>
+<script src="js/vendor/xlsx.full.min.js?v=57"></script>
+<script src="js/calc.js?v=57"></script>
+<script src="js/retail.js?v=57"></script>
+<script src="js/breakeven.js?v=57"></script>
+<script src="js/validate.js?v=57"></script>
+<script src="js/xlsx-import.js?v=57"></script>
+<script src="js/store.js?v=57"></script>
+<script src="js/charts.js?v=57"></script>
+<script src="js/export.js?v=57"></script>
+<script src="js/wc-template.js?v=57"></script>
+<script src="js/scenario-price.js?v=57"></script>
+<script src="js/wc-import8760.js?v=57"></script>
+<script src="js/wholesale.js?v=57"></script>
+<script src="js/app.js?v=57"></script>
 </body>
 </html>

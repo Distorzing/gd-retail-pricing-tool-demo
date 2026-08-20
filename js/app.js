@@ -276,15 +276,6 @@
       invalidateResult();
     });
     toggle('rtCoalOn', ['rtCeciSign', 'rtCeciSettle', 'rtCoalPrice']);
-    toggle('rtGreenOn', ['rtGreenVolMode', 'rtGreenRatio', 'rtGreenUsage', 'rtGreenFRatio', 'rtGreenFPrice', 'rtGreenLRatio', 'rtGreenLPrice', 'rtGreenAssessMode', 'rtGreenAssessCoef', 'rtGreenSupVol', 'rtGreenSupPrice']);
-    $('rtGreenVolMode').addEventListener('change', () => {
-      $('rtGreenRatio').disabled = $('rtGreenVolMode').value !== 'ratio' || !$('rtGreenOn').checked;
-      $('rtGreenVolume').disabled = $('rtGreenVolMode').value !== 'fixed' || !$('rtGreenOn').checked;
-      invalidateResult();
-    });
-    $('rtGreenOn').addEventListener('change', () => {
-      $('rtGreenArea').classList.toggle('hidden', !$('rtGreenOn').checked);
-    });
     renderLinkRows();
   }
 
@@ -561,25 +552,25 @@
         green: { enabled: false, volumeMode: 'ratio', ratio: 1, actualGreenUsage: 0, fixedRatio: 1, fixedPrice: 0, linkRatio: 0, linkEnvPrice: 0, priority: 'A', assessMode: 'none', assessCoef: 0, supplement: { volume: 0, price: 0 } }
       };
     }
-    const greenOn = $('rtGreenOn').checked;
     return {
       userType: $('rtUserType').value,
       fixed: { ratio: (Number($('rtFixedRatio').value) || 0) / 100, flatPrice: 0 },   // 平段价=待求输出，不输入
       link: { modes: linkModes },
       coal: { enabled: $('rtCoalOn').checked, ceciSign: Number($('rtCeciSign').value) || 0, ceciSettle: Number($('rtCeciSettle').value) || 0, floatPrice: Number($('rtCoalPrice').value) || 0 },
       floatFee: { enabled: false, price: 0 },   // 2026 新规：固定+联动模式不签浮动费用
-      green: { enabled: greenOn,
-        volumeMode: $('rtGreenVolMode').value,
-        ratio: (Number($('rtGreenRatio').value) || 0) / 100,
-        fixedVolume: Number($('rtGreenVolume').value) || 0,
-        actualGreenUsage: Number($('rtGreenUsage').value) || 0,
-        fixedRatio: (Number($('rtGreenFRatio').value) || 0) / 100,
-        fixedPrice: Number($('rtGreenFPrice').value) || 0,
-        linkRatio: (Number($('rtGreenLRatio').value) || 0) / 100,
-        linkEnvPrice: Number($('rtGreenLPrice').value) || 0,
+      green: { enabled: false,   // 固定+联动模式删除绿电环境价值输入
+        volumeMode: 'ratio',
+        volumeMode: 'ratio',
+        ratio: 1,
+        fixedVolume: 0,
+        actualGreenUsage: 0,
+        fixedRatio: 1,
+        fixedPrice: 0,
+        linkRatio: 0,
+        linkEnvPrice: 0,
         priority: 'A',
-        assessMode: $('rtGreenAssessMode').value, assessCoef: Number($('rtGreenAssessCoef').value) || 0,
-        supplement: { volume: Number($('rtGreenSupVol').value) || 0, price: Number($('rtGreenSupPrice').value) || 0 } }
+        assessMode: 'none', assessCoef: 0,
+        supplement: { volume: 0, price: 0 } }
     };
   }
 
