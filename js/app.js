@@ -266,11 +266,9 @@
       $('rtRatioSum').style.color = Math.abs(sum - 100) < 1e-6 ? 'var(--green)' : 'var(--red)';
     };
     // 方式③与①②互斥
-    const mutex = () => {
-      if ($('rtLink3').checked) { $('rtLink1').checked = false; $('rtLink2').checked = false; }
-      else if ($('rtLink1').checked || $('rtLink2').checked) $('rtLink3').checked = false;
-    };
-    ['rtLink1', 'rtLink2', 'rtLink3'].forEach(id => $(id).addEventListener('change', () => { mutex(); renderLinkRows(); invalidateResult(); }));
+    $('rtLink1').addEventListener('change', e => { if (e.target.checked) $('rtLink2').checked = false; renderLinkRows(); invalidateResult(); });
+    $('rtLink2').addEventListener('change', e => { if (e.target.checked) $('rtLink1').checked = false; renderLinkRows(); invalidateResult(); });
+    $('rtLink3').addEventListener('change', () => { renderLinkRows(); invalidateResult(); });
     $('rtFixedRatio').addEventListener('input', () => { rtSumHint(); invalidateResult(); });
     // 开关联动
     const toggle = (chk, fields) => $(chk).addEventListener('change', () => {
@@ -540,11 +538,17 @@
     const linkModes = [];
     [['rtLink1', 1], ['rtLink2', 2], ['rtLink3', 3]].forEach(([id, type]) => {
       if ($(id).checked) {
-        linkModes.push({
-          type,
-          ratio: (Number($('rtLink' + type + 'Ratio').value) || 0) / 100,
-          flatPrice: Number($('rtLink' + type + 'Price').value) || 0
-        });
+        let linkPrice = Number($('rtLink' + type + 'Price').value) || 0;
+        if (type === 3 && linkPrice <= 0) {
+          // 现货联动价 = 8760 日前价格按电量加权的月度综合价（自动，不手填）
+          const keys = state.validation.series.keys;
+          const da = state.params.scenarios[0].curve;
+          const qArr = state.qMWh && state.qMWh.length === keys.length ? state.qMWh : null;
+          let ws = 0, qs = 0;
+          for (let t2 = 0; t2 < keys.length; t2++) { const w = qArr ? qArr[t2] : 1; ws += w * da[t2]; qs += w; }
+          linkPrice = qs > 0 ? ws / qs : 0;
+        }
+        linkModes.push({ type, ratio: (Number($('rtLink' + type + 'Ratio').value) || 0) / 100, flatPrice: linkPrice });
       }
     });
     const planMode = (document.querySelector('input[name=planMode]:checked') || {}).value || 'linkage';

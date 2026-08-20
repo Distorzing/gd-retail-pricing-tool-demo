@@ -36,8 +36,16 @@ ok('固定价 600 > 554 → 拦截', R.calcRetail(bad1, R.demoUsage()).errors.le
 const bad2 = JSON.parse(JSON.stringify(R.demoInput())); bad2.fixed.ratio = 0.8;
 ok('固定 80% + 联动 10% ≠ 100% → 拦截', R.calcRetail(bad2, R.demoUsage()).errors.length > 0);
 const bad3 = JSON.parse(JSON.stringify(R.demoInput()));
-bad3.link.modes = [{ type: 3, ratio: 0.1, flatPrice: 540 }, { type: 1, ratio: 0, flatPrice: 500 }];
-ok('方式③与①同时勾选 → 拦截', R.calcRetail(bad3, R.demoUsage()).errors.length > 0);
+bad3.fixed.ratio = 0.85;
+bad3.link.modes = [{ type: 1, ratio: 0.05, flatPrice: 540 }, { type: 2, ratio: 0.10, flatPrice: 530 }];
+ok('方式①与②同时勾选 → 拦截（互斥）', R.calcRetail(bad3, R.demoUsage()).errors.some(e => e.indexOf('互斥') >= 0));
+const ok3 = JSON.parse(JSON.stringify(R.demoInput()));
+ok3.fixed.ratio = 0.85;
+ok3.link.modes = [{ type: 1, ratio: 0.05, flatPrice: 540 }, { type: 3, ratio: 0.10, flatPrice: 500 }];
+ok('方式①与③同时勾选 → 合法（新规允许）', R.calcRetail(ok3, R.demoUsage()).errors.length === 0);
+const pureFix = JSON.parse(JSON.stringify(R.demoInput()));
+pureFix.fixed.ratio = 1; pureFix.link.modes = [];
+ok('纯固定价（0% 联动）→ 拦截（新规不允许）', R.calcRetail(pureFix, R.demoUsage()).errors.some(e => e.indexOf('低于下限 10%') >= 0));
 const bad4 = JSON.parse(JSON.stringify(R.demoInput()));
 bad4.link.modes = [{ type: 3, ratio: 0.3, flatPrice: 540 }]; bad4.fixed.ratio = 0.7;
 ok('方式③占比 30% > 20% → 拦截', R.calcRetail(bad4, R.demoUsage()).errors.length > 0);

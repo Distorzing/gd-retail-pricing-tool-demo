@@ -103,18 +103,22 @@
       errors.push('固定平段价格 ' + fixedPrice + ' 超出 [' + CONFIG.FIXED_PRICE_MIN + ', ' + CONFIG.FIXED_PRICE_MAX + '] 元/MWh');
     }
     const modes = (input.link && input.link.modes) || [];
-    const hasM3 = modes.some(m => m.type === 3);
-    const hasM12 = modes.some(m => m.type === 1 || m.type === 2);
-    if (hasM3 && hasM12) errors.push('联动方式③与①②不能同时勾选');
+    // 2026 新规：纯固定价不允许——「固定+联动」合同必须有 10%~30% 联动
+    // ①月度交易综合价 与 ②月度集中竞争价 互斥；两者均可与③现货联动同时勾选
+    if (modes.some(m => m.type === 1) && modes.some(m => m.type === 2)) {
+      errors.push('联动方式①（月度交易综合价）与②（月度集中竞争价）互斥，只能二选一');
+    }
     const linkRatioSum = modes.reduce((a, m) => a + (Number(m.ratio) || 0), 0);
     if (Math.abs(fixedRatio + linkRatioSum - 1) > 1e-9) {
       errors.push('固定占比 ' + pct(fixedRatio) + ' + 联动占比 ' + pct(linkRatioSum) + ' ≠ 100%');
     }
-    if (modes.length && linkRatioSum < CONFIG.LINK_MIN_RATIO - 1e-9) {
-      errors.push('联动总占比 ' + pct(linkRatioSum) + ' 低于下限 10%');
-    }
-    if (linkRatioSum > CONFIG.LINK_MAX_RATIO + 1e-9) {
-      errors.push('联动总占比 ' + pct(linkRatioSum) + ' 超过上限 30%（2026 新规）');
+    if (input.planMode !== 'fair') {
+      if (linkRatioSum < CONFIG.LINK_MIN_RATIO - 1e-9) {
+        errors.push('联动总占比 ' + pct(linkRatioSum) + ' 低于下限 10%（2026 新规：纯固定价合同不允许，至少 10% 电量参与市场联动）');
+      }
+      if (linkRatioSum > CONFIG.LINK_MAX_RATIO + 1e-9) {
+        errors.push('联动总占比 ' + pct(linkRatioSum) + ' 超过上限 30%（2026 新规）');
+      }
     }
     const m3 = modes.find(m => m.type === 3);
     if (m3) {
