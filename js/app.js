@@ -276,7 +276,6 @@
       invalidateResult();
     });
     toggle('rtCoalOn', ['rtCeciSign', 'rtCeciSettle', 'rtCoalPrice']);
-    toggle('rtFloatOn', ['rtFloatPrice']);
     toggle('rtGreenOn', ['rtGreenVolMode', 'rtGreenRatio', 'rtGreenUsage', 'rtGreenFRatio', 'rtGreenFPrice', 'rtGreenLRatio', 'rtGreenLPrice', 'rtGreenAssessMode', 'rtGreenAssessCoef', 'rtGreenSupVol', 'rtGreenSupPrice']);
     $('rtGreenVolMode').addEventListener('change', () => {
       $('rtGreenRatio').disabled = $('rtGreenVolMode').value !== 'ratio' || !$('rtGreenOn').checked;
@@ -568,7 +567,7 @@
       fixed: { ratio: (Number($('rtFixedRatio').value) || 0) / 100, flatPrice: 0 },   // 平段价=待求输出，不输入
       link: { modes: linkModes },
       coal: { enabled: $('rtCoalOn').checked, ceciSign: Number($('rtCeciSign').value) || 0, ceciSettle: Number($('rtCeciSettle').value) || 0, floatPrice: Number($('rtCoalPrice').value) || 0 },
-      floatFee: { enabled: $('rtFloatOn').checked, price: Number($('rtFloatPrice').value) || 0 },
+      floatFee: { enabled: false, price: 0 },   // 2026 新规：固定+联动模式不签浮动费用
       green: { enabled: greenOn,
         volumeMode: $('rtGreenVolMode').value,
         ratio: (Number($('rtGreenRatio').value) || 0) / 100,
