@@ -159,18 +159,36 @@
     if (anomalies.outOfYear.length > 0) errors.push('存在报价年度（' + year + '）之外的日期');
     if (anomalies.badHours.length > 0) errors.push('存在无法识别的时刻（须为 0–23 或 1–24 整点）');
 
-    const ok = errors.length === 0;
-    let series = null, stats = null;
-    if (ok) {
+    // 重复点/负值/越界/时刻错误 → 始终拦截（与是否部分曲线无关）
+    const hardErrors = anomalies.duplicates.length > 0 || anomalies.negatives.length > 0 || anomalies.outOfYear.length > 0 || anomalies.badHours.length > 0;
+    // 部分连续曲线（年内新增）：缺月补 0，校验通过但警告；完整 8760 不变
+    const presentDates = [...map.keys()].map(k => k.slice(0, 10));
+    const minD = presentDates.length ? presentDates.reduce((a, b) => a < b ? a : b) : null;
+    const maxD = presentDates.length ? presentDates.reduce((a, b) => a > b ? a : b) : null;
+    let series = null, stats = null, ok = false;
+    if (map.size === need) {
+      ok = !hardErrors;
       const values = expected.map(k => map.get(k));
       const Q = values.reduce((a, b) => a + b, 0);
-      stats = {
-        count: values.length, Q,
-        min: Math.min.apply(null, values), max: Math.max.apply(null, values),
-        avg: Q / values.length
-      };
+      stats = { count: values.length, Q, min: Math.min.apply(null, values), max: Math.max.apply(null, values), avg: Q / values.length };
       series = { keys: expected, values };
-    } else {
+    } else if (missingCount > 0 && minD && maxD && !hardErrors) {
+      // 缺失小时全部在 [minD, maxD] 之外（部分连续曲线）→ 补 0，通过
+      const missingInRange = expected.filter(k => !map.has(k) && k.slice(0, 10) >= minD && k.slice(0, 10) <= maxD);
+      if (missingInRange.length === 0) {
+        ok = true;
+        const values = expected.map(k => map.has(k) ? map.get(k) : 0);
+        // Q/avg 只按有数据时段算（补零不计入统计，避免拉低）
+        const present = [...map.values()];
+        const Q = present.reduce((a, b) => a + b, 0);
+        stats = { count: values.length, Q, min: Math.min.apply(null, present), max: Math.max.apply(null, present), avg: Q / present.length, partial: true };
+        series = { keys: expected, values };
+        warnings.push('部分连续曲线：' + minD + ' ~ ' + maxD + '（' + (map.size) + ' 点），窗口外 ' + missingCount + ' 个小时已补 0');
+      }
+    }
+    if (!ok) {
+      if (map.size !== need) errors.push('有效数据点 ' + map.size + ' / 应有 ' + need + '（' + year + '年 8760 点校验未通过）');
+      if (missingCount > 0) errors.push('缺失 ' + missingCount + ' 个小时点');
       stats = { count: map.size, Q: null };
     }
     return { ok, errors, warnings, anomalies, missingCount, series, stats };

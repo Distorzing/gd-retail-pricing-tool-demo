@@ -21,7 +21,7 @@ const mini = {
     allocShare: 2, refundShare: 1, sr: 3, o: 2, curve: [100, 200, 300, 400]
   }],
   costModel: {
-    procurementMode: 'standard_proxy', reservePerMwh: 3,
+    procurementMode: 'standard_proxy', reservePerMwh: 0,   // V2 起删准备金
     riskThresholds: { varAlpha: 0.95, minGrossMargin: 3, maxLossProbPct: 35, maxCvar: 8 }
   },
   tiers: [
@@ -34,18 +34,18 @@ const mini = {
 const K4 = ['2026-01-01|00', '2026-01-01|01', '2026-01-01|02', '2026-01-01|03'];
 // q=[1,2,3,4] Q=10，无曲线→默认假设 purchase=r0×Q×g=1.25×4（r0=0.5），价格=wLt=240
 // Clt=0.5×240=120；gap=max(q−1.25,0)=[0,0.75,1.75,2.75]
-// Cda=(0×100+0.75×200+1.75×300+2.75×400)/10=177.5；C总=120+177.5+2−1+3+2+3=306.5
+// Cda=(0×100+0.75×200+1.75×300+2.75×400)/10=177.5；C总=120+177.5+2−1+3+2+3=303.5
 const r1 = Calc.computeQuote({ q: [1, 2, 3, 4], keys: K4, W: 250, wLt: 240, K: 1, params: mini });
 const s1 = r1.scenarios[0];
 ok('中长期成本 Clt=r0×wLt=120', near(s1.Clt, 120));
 ok('日前缺口成本 Cda=177.5', near(s1.Cda, 177.5));
 ok('C批发=120+177.5+2−1=298.5', near(s1.Cwholesale, 298.5));
-ok('C总=298.5+3+2+3=306.5', near(s1.Ctotal, 306.5));
-ok('E[C]=306.5', near(r1.EC, 306.5));
-ok('保守价=(C95+20)/1=326.5', near(r1.tiers[0].price, 326.5));
-ok('目标价=(C90+10)/1=316.5', near(r1.tiers[1].price, 316.5));
-ok('冲单价=(C80+5)/1=311.5', near(r1.tiers[2].price, 311.5));
-ok('冲单预期利润=311.5−306.5=5', near(r1.tiers[2].expectedProfit, 5));
+ok('C总=298.5+3+2=303.5（V2 删准备金）', near(s1.Ctotal, 303.5));
+ok('E[C]=303.5', near(r1.EC, 303.5));
+ok('保守价=(C95+20)/1=323.5', near(r1.tiers[0].price, 323.5));
+ok('目标价=(C90+10)/1=313.5', near(r1.tiers[1].price, 313.5));
+ok('冲单价=(C80+5)/1=308.5', near(r1.tiers[2].price, 308.5));
+ok('冲单预期利润=308.5−303.5=5', near(r1.tiers[2].expectedProfit, 5));
 ok('三门槛全过（推荐资格）', r1.tiers[2].gates.all === true);
 ok('默认假设标注且覆盖率=r0=0.5', r1.procurement.isDefault === true && near(r1.procurement.coverage, 0.5));
 
@@ -60,8 +60,8 @@ ok('rtFactor/loadError 不影响 C总', near(r2.scenarios[0].Ctotal, r1.scenario
 /* ---------- 3. K 联动（P平=(Cq+M)/K） ---------- */
 console.log('\n[3] K 联动');
 const r4 = Calc.computeQuote({ q: [1, 2, 3, 4], keys: K4, W: 250, wLt: 240, K: 1.2, params: mini });
-ok('等效价不变=326.5（K 不影响成本）', near(r4.tiers[0].price, 326.5));
-ok('P平=326.5/1.2=272.0833', near(r4.tiers[0].Pping, 326.5 / 1.2, 1e-4));
+ok('等效价不变=323.5（K 不影响成本）', near(r4.tiers[0].price, 323.5));
+ok('P平=323.5/1.2=269.5833', near(r4.tiers[0].Pping, 323.5 / 1.2, 1e-4));
 
 /* ---------- 4. VaR/CVaR 与冲单门槛（多情景） ---------- */
 console.log('\n[4] VaR/CVaR 与冲单门槛');

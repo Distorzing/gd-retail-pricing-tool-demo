@@ -25,7 +25,7 @@ const mini = {
     id: 'S1', name: '单一情景', weight: 1, priceFactor: 1,
     allocShare: 2, refundShare: 1, sr: 3, o: 2, curve: [100, 200, 300, 400]
   }],
-  costModel: { procurementMode: 'standard_proxy', reservePerMwh: 3, riskThresholds: { varAlpha: 0.95, minGrossMargin: 3, maxLossProbPct: 35, maxCvar: 8 } },
+  costModel: { procurementMode: 'standard_proxy', reservePerMwh: 0, riskThresholds: { varAlpha: 0.95, minGrossMargin: 3, maxLossProbPct: 35, maxCvar: 8 } },  // V2 起删准备金
   tiers: [
     { key: 'conservative', name: '保守价', q: 0.95, M: 20 },
     { key: 'target', name: '目标价', q: 0.90, M: 10 },
@@ -34,19 +34,19 @@ const mini = {
   redLines: {}
 };
 // Q=10，默认假设 purchase=1.25×4（r0=0.5，价格240）；Clt=120；gap=[0,0.75,1.75,2.75]
-// Cda=177.5；C总=306.5
+// Cda=177.5；C总=303.5
 const r1 = Calc.computeQuote({ q: [1, 2, 3, 4], keys: K4, W: 250, wLt: 240, K: 1, params: mini });
 ok('Q=10', near(r1.Q, 10));
 ok('标定系数 k=1（W 恰为统调加权均价）', near(r1.scenarios[0].calibK, 1));
 ok('Clt=120（默认假设 r0×W_LT）', near(r1.scenarios[0].Clt, 120));
 ok('Cda=177.5（日前缺口层）', near(r1.scenarios[0].Cda, 177.5));
-ok('C总=C批发+SR+O+准备金=306.5', near(r1.scenarios[0].Ctotal, 306.5));
-ok('保守价=(C95+20)/K=326.5', near(r1.tiers[0].price, 326.5));
-ok('目标价=(C90+10)/K=316.5', near(r1.tiers[1].price, 316.5));
-ok('冲单价=(C80+5)/K=311.5', near(r1.tiers[2].price, 311.5));
+ok('C总=C批发+SR+O=303.5（V2 删准备金）', near(r1.scenarios[0].Ctotal, 303.5));
+ok('保守价=(C95+20)/K=323.5', near(r1.tiers[0].price, 323.5));
+ok('目标价=(C90+10)/K=313.5', near(r1.tiers[1].price, 313.5));
+ok('冲单价=(C80+5)/K=308.5', near(r1.tiers[2].price, 308.5));
 ok('冲单预期利润=5', near(r1.tiers[2].expectedProfit, 5));
-ok('元/度=元/MWh ÷1000', near(Calc.unit.toYuanPerKwh(311.5), 0.3115));
-ok('分/度=元/MWh ÷10', near(Calc.unit.toFenPerKwh(311.5), 31.15));
+ok('元/度=元/MWh ÷1000', near(Calc.unit.toYuanPerKwh(308.5), 0.3085));
+ok('分/度=元/MWh ÷10', near(Calc.unit.toFenPerKwh(308.5), 30.85));
 
 /* ---------- 2. 加权分位数 ---------- */
 console.log('\n[2] 加权分位数 Cq（成本升序累计权重首次达 q）');

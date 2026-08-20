@@ -22,84 +22,70 @@
   function tierRows(result, pv) {
     return result.tiers.map(t => {
       const warn = t.warnings.length ? '⚠ ' + t.warnings.join('；') : '—';
-      let priceCells;
-      if (pv && pv.active) {
-        const p = pv.perTier[t.key];
-        priceCells =
-          '<td class="num">' + f2(p.Pfeng) + '</td>' +
-          '<td class="num"><b>' + f2(p.Pping) + '</b></td>' +
-          '<td class="num">' + f2(p.Pgu) + '</td>' +
-          '<td class="num">' + f2(t.price) + '</td>' +
-          '<td class="num">' + f2(U().toYuanPerKwh(t.price), 4) + '</td>' +
-          '<td class="num">' + fen(t.price) + '</td>';
-      } else {
-        priceCells =
-          '<td class="num" colspan="3">—（单一固定价）</td>' +
-          '<td class="num">' + f2(t.price) + '</td>' +
-          '<td class="num">' + yuan(t.price) + '</td>' +
-          '<td class="num">' + fen(t.price) + '</td>';
-      }
+      const be = t.breakEven || {};
+      const tou = (t.retail ? { f1: (t.retail.tou || {}).f1, f2: (t.retail.tou || {}).f2 } : null) || { f1: 1, f2: 1 };
+      const pP = be.flatPrice != null ? be.flatPrice : null;
+      const eq = t.retail ? t.retail.unitPrice : t.price;
+      const priceCells =
+        '<td class="num">' + (pP != null ? f2(tou.f1 * pP) : '—') + '</td>' +
+        '<td class="num"><b>' + (pP != null ? f2(pP) : '—') + '</b></td>' +
+        '<td class="num">' + (pP != null ? f2(tou.f2 * pP) : '—') + '</td>' +
+        '<td class="num">' + f2(t.equiv) + '</td>' +
+        '<td class="num">' + f2(eq) + '</td>' +
+        '<td class="num">' + fen(eq) + '</td>';
       return '<tr>' +
         '<td><b>' + t.name + '</b>' + (t.recommended ? '（推荐）' : '') + '</td>' +
         priceCells +
-        '<td class="num">' + signed(t.expectedProfit) + '</td>' +
+        '<td class="num">' + signed(t.profitPerMwh != null ? t.profitPerMwh : t.expectedProfit) + '</td>' +
         '<td class="num">' + (t.lossWeight * 100).toFixed(1) + '%</td>' +
         '<td class="num">' + signed(t.worstProfit) + '</td>' +
         '<td>' + warn + '</td></tr>';
     }).join('');
   }
 
-  const UC_LABEL = {
-    area: { gd: '广东（非深圳）', sz: '深圳供电局区域', sz_inc: '深圳增量配电网' },
-    pvPolicy: { yes: '原执行峰谷分时电价', no: '原不执行峰谷价格政策', unknown: '待核验' },
-    yn: { yes: '是', no: '否', unknown: '待核验' },
-    contractMode: { pv: '峰平谷系数结算', flat: '全时段同价' }
-  };
-  function ucRows(uc) {
-    if (!uc) return '';
-    return '<tr><td>合同价口径</td><td>' + UC_LABEL.contractMode[uc.contractMode] + '</td></tr>' +
-      '<tr><td>供电营业区</td><td>' + UC_LABEL.area[uc.area] + '</td></tr>' +
-      '<tr><td>原峰谷政策状态</td><td>' + UC_LABEL.pvPolicy[uc.pvPolicy] + '</td></tr>' +
-      '<tr><td>低压标识 / 蓄冷认定</td><td>' + UC_LABEL.yn[uc.lowVoltage] + ' / ' + UC_LABEL.yn[uc.iceStorage] + '</td></tr>' +
-      '<tr><td>电压等级 / 计量方式</td><td>' + escH(uc.voltage) + ' / ' + escH(uc.metering) + '</td></tr>' +
-      '<tr><td>用电类别 / 容量</td><td>' + escH(uc.category) + (uc.capacityKva ? ' / ' + uc.capacityKva + ' kVA' : ' / 未填') + '</td></tr>';
+  function ucRows(uc, retail) {
+    if (retail && retail.input) {
+      return '<tr><td>用户类型（零售收入）</td><td>' + escH(retail.input.userType) + '（f1=' + retail.result.tou.f1 + ' / f2=' + retail.result.tou.f2 + '）</td></tr>' +
+        '<tr><td>固定价格结构</td><td>固定占比 ' + (retail.input.fixed.ratio * 100).toFixed(1) + '% @平段价 ' + retail.input.fixed.flatPrice + ' 元/MWh' +
+        (retail.input.link.modes.length ? '；联动 ' + retail.input.link.modes.map(m => '方式' + m.type + ' ' + (m.ratio * 100).toFixed(1) + '%@' + m.flatPrice).join('、') : '') + '</td></tr>' +
+        (retail.input.coal.enabled ? '<tr><td>煤电联动</td><td>CECI ' + retail.input.coal.ceciSign + '→' + retail.input.coal.ceciSettle + ' @浮动 ' + retail.input.coal.floatPrice + ' 元/MWh</td></tr>' : '') +
+        (retail.input.floatFee.enabled ? '<tr><td>浮动电费</td><td>' + retail.input.floatFee.price + ' 元/MWh</td></tr>' : '') +
+        (retail.input.green.enabled ? '<tr><td>绿电环境价值</td><td>已启用</td></tr>' : '');
+    }
+    return '';
   }
 
-  function pvSection(ctx) {
-    const pv = ctx.pv;
-    if (!pv) return '';
-    if (!pv.active) {
-      return '<h2>峰谷规则匹配</h2><div class="meta">未进入峰谷平衡机制：' + escH(pv.reason || '—') + '，报价按单一固定价输出。</div>';
-    }
-    const rk = pv.risks;
+  function pvSection(pv, retail) {
+    if (!retail || !retail.result) return '';
+    const r = retail.result;
     const w = v => (v / 10000).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
-    const srcLinks = (pv.sources || []).map(s => '<a href="' + escH(s.url) + '">' + escH(s.name) + '</a>').join('<br>');
-    return '<h2>峰谷规则匹配（V1.1）</h2><table>' +
-      '<tr><th>项目</th><th>内容</th></tr>' +
-      '<tr><td>匹配系数行</td><td>' + escH(pv.coeffRow.name) + '（f1=' + pv.coeffRow.f1 + ' / 平=1.00 / f2=' + pv.coeffRow.f2 + '）' + (pv.chosenByUser ? '（重叠组合，人工选定）' : '') + '</td></tr>' +
-      '<tr><td>规则版本 / 生效日期</td><td>' + escH(pv.ruleVersion) + ' / ' + escH(pv.effectiveDate) + ' 起</td></tr>' +
-      '<tr><td>电量结构</td><td>Q峰 ' + f2(pv.shares.Qp) + ' / Q平 ' + f2(pv.shares.Qf) + ' / Q谷 ' + f2(pv.shares.Qv) + ' MWh；Q尖 ' + f2(pv.shares.Qsharp) + ' MWh</td></tr>' +
-      '<tr><td>官方来源</td><td>' + srcLinks + '</td></tr></table>' +
-      '<h2>峰谷平衡风险（单列，未计入报价）</h2><table>' +
-      '<tr><th>项目</th><th>金额（万元）</th><th>说明</th></tr>' +
-      '<tr><td>峰谷平衡原始暴露</td><td class="num">' + w(rk.exposureTotal) + '</td><td>C=W×[(f1−1)Q峰−(1−f2)Q谷]=' + signed(rk.exposurePerMwh) + ' 元/MWh；原始暴露≠最终分摊</td></tr>' +
-      '<tr><td>尖峰电能量加价（估算）</td><td class="num">' + w(rk.sharpEnergy) + '</td><td>W×f1×0.25×Q尖</td></tr>' +
-      '<tr><td>尖峰输配加价（估算）</td><td class="num">' + w(rk.sharpTnd) + '</td><td>峰段输配电价×0.25×Q尖</td></tr>' +
-      '<tr><td>峰谷相关系统运行费</td><td class="num">' + w(rk.sysOpFee) + '</td><td>配置单价×Q</td></tr>' +
-      '<tr><td>市场化分摊（峰谷相关）</td><td class="num">' + w(rk.marketShare) + '</td><td>配置单价×Q</td></tr></table>';
+    const rows = [
+      ['固定价格电费', r.energy.fixed.total],
+      ['市场联动电费', r.energy.linked.total],
+      ['煤电联动电费', r.energy.coal ? r.energy.coal.total : null],
+      ['浮动电费', r.energy.floatFee ? r.energy.floatFee.total : null],
+      ['峰谷平衡·谷段补贴', r.peakValley.valleySubsidy],
+      ['峰谷平衡·峰段惩罚', -r.peakValley.peakPenalty],
+      ['绿电环境价值', retail.input.green && retail.input.green.enabled ? r.green.total : null]
+    ].filter(x => x[1] != null && Math.abs(x[1]) > 1e-9);
+    return '<h2>零售侧收入明细（电能量+峰谷平衡+绿电）</h2><table>' +
+      '<tr><th>收入组件</th><th>金额（万元）</th><th>占比</th></tr>' +
+      rows.map(x => '<tr><td>' + escH(x[0]) + '</td><td class="num">' + w(x[1]) + '</td><td class="num">' + (x[1] / r.grandTotal * 100).toFixed(1) + '%</td></tr>').join('') +
+      '<tr><td><b>零售收入合计</b></td><td class="num"><b>' + w(r.grandTotal) + '</b></td><td class="num">100%</td></tr>' +
+      '<tr><td>折合度电单价</td><td colspan="2">' + r.unitPriceYuanPerKwh.toFixed(4) + ' 元/kWh（' + f2(r.unitPrice) + ' 元/MWh）</td></tr></table>' +
+      '<div class="meta">用户类型：' + escH(retail.input.userType) + '（f1=' + r.tou.f1 + ' / f2=' + r.tou.f2 + '）· 峰/平/谷 ' +
+      f2(r.usage.peak) + ' / ' + f2(r.usage.flat) + ' / ' + f2(r.usage.valley) + ' MWh</div>';
   }
 
   /** 生成打印版报价说明 HTML */
   function buildReportHTML(ctx) {
     const { result, inputs, paramMeta, calcTime, validation, pv } = ctx;
     const r = result;
-    const pvActive = pv && pv.active;
+    const pvActive = true;   // 零售口径下恒为峰平谷结构
     const cm = (ctx.params && ctx.params.costModel) || {};
     const bill = ctx.bill || null;
     const billAdd = bill && bill.item.bearer === 'pass' ? bill.annual : 0;
-    const priceHead = pvActive
-      ? '<th>峰价<br>元/MWh</th><th>平价<br>元/MWh</th><th>谷价<br>元/MWh</th><th>等效平均价<br>元/MWh</th><th>元/度</th><th>分/度</th>'
-      : '<th colspan="3">峰/平/谷</th><th>元/MWh</th><th>元/度</th><th>分/度</th>';
+    const priceHead = '<th>P峰<br>元/MWh</th><th>盈亏平衡 P平<br>元/MWh</th><th>P谷<br>元/MWh</th><th>成本口径<br>元/MWh</th><th>零售等效<br>元/MWh</th><th>分/度</th>';
     const gateTxt = (pv && pv.formalBlocked)
       ? '<div class="warn" style="font-weight:700">⛔ 本结果为内部测算：' + escH(pv.blockReason) + '，不得作为正式对客报价。</div>'
       : '';
@@ -127,7 +113,7 @@
       (r.procurement.isDefault ? '（默认年度基准假设）' : '（' + r.procurement.curveCount + ' 条批发曲线）') +
       '；加权采购均价 ' + f2(r.procurement.weightedPrice) + ' 元/MWh；日前市场缺口 ' + r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh</td></tr>' +
       '<tr><td>结构风险准备金（估算）</td><td>' + f2(r.reserve) + ' 元/MWh · ' + ((cm.reserveApproval && cm.reserveApproval.ok) ? '已审批（' + escH(cm.reserveApproval.by) + '）' : '未审批') + '</td></tr>' +
-      ucRows(ctx.uc) + '</table>' +
+      ucRows(ctx.uc, ctx.retail) + '</table>' +
 
       '<h2>二、三档峰平谷固定价' + (pvActive ? '' : '（单一固定价）') + '</h2><table>' +
       '<tr><th>档位</th>' + priceHead + '<th>预期利润<br>(元/MWh)</th><th>亏损概率</th><th>CVaR95<br>(元/MWh)</th><th>门槛</th></tr>' +
@@ -143,7 +129,7 @@
       r.tiers.map(t => '<td class="num"><b>' + signed(t.expectedProfit) + '</b></td>').join('') + '</tr></table>' +
       '<div class="meta">Πs = 零售收入单价 − C总,s；亏损概率、VaR/CVaR 按情景权重计算，不假设正态分布。C_LT=Σ(有效采购电量×采购价) 由批发曲线汇总；日前缺口 E_t=max(Q_t−Q_LT,t,0)，C_DA,s=Σ(E_t×P_DA,s,t)。本口径不含实时价格与日前—实时偏差电费。</div>' +
 
-      pvSection(ctx) +
+      pvSection(ctx.pv, ctx.retail) +
       billSection(bill, billAdd, r) +
 
       '<h2>四、曲线暴露解读</h2><div>' + ctx.cvExplanation + '</div>' +
@@ -215,7 +201,7 @@
         curvePoints: validation.count,
         Q_MWh: result.Q
       },
-      userClass: ctx.uc || null,
+      retail: ctx.retail ? { userType: ctx.retail.input.userType, fixed: ctx.retail.input.fixed, link: ctx.retail.input.link } : null,
       paramVersion: {
         versionId: paramMeta.versionId, versionName: paramMeta.versionName,
         effectiveDate: paramMeta.effectiveDate, createdAt: paramMeta.createdAt,
@@ -247,7 +233,9 @@
           worstProfit: t.worstProfit, VaR: t.VaR, CVaR: t.CVaR, varAlpha: t.varAlpha,
           gates: t.gates, perScenarioProfit: t.perScenarioProfit,
           warnings: t.warnings,
-          peakValley: (ctx.pv && ctx.pv.active && ctx.pv.perTier[t.key]) || null
+          breakEven: t.breakEven ? { flatPrice: t.breakEven.flatPrice, K: t.breakEven.K } : null,
+          retailUnitPrice: t.retail ? t.retail.unitPrice : null,
+          profitPerMwh: t.profitPerMwh != null ? t.profitPerMwh : null
         }))
       },
       procurementSummary: {
@@ -265,10 +253,9 @@
       peakValley: ctx.pv ? {
         active: ctx.pv.active, status: ctx.pv.status, reason: ctx.pv.reason,
         coeffRow: ctx.pv.coeffRow || null, chosenByUser: !!ctx.pv.chosenByUser,
-        K: ctx.pv.K, shares: ctx.pv.shares || null, risks: ctx.pv.risks || null,
+        K: ctx.pv.K, shares: ctx.pv.shares || null,
         ruleVersion: ctx.pv.ruleVersion, effectiveDate: ctx.pv.effectiveDate,
         sources: ctx.pv.sources,
-        szTerminal: ctx.szTerm ? { row: ctx.szTerm.row, note: ctx.szTerm.note, warns: ctx.szTerm.warns } : null
       } : null,
       billLayer: ctx.bill ? { item: ctx.bill.item, annual: ctx.bill.annual } : null,
       cvExplanation

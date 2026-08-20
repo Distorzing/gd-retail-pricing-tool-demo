@@ -150,6 +150,32 @@
     return out;
   }
 
+  /** 报价窗口下标集：返回 keys 中落在 [from,to]（MM-DD）内的下标 */
+  function windowIndices(keys, from, to) {
+    const idx = [];
+    for (let t = 0; t < keys.length; t++) {
+      const md = keys[t].slice(5, 10);
+      if (md >= from && md <= to) idx.push(t);
+    }
+    return idx;
+  }
+
+  /** 采购结果裁剪到签约窗口：窗口外 purchase/gap/over=0，汇总量重算（年内新增用户的增量成本口径） */
+  function clipProcurementToWindow(proc, inWin, qW) {
+    const n = proc.purchase.length;
+    const purchase = new Array(n), gap = new Array(n), over = new Array(n);
+    let totalPurchase = 0, totalCost = 0, gapMwh = 0, overMwh = 0;
+    for (let t = 0; t < n; t++) {
+      if (inWin(t)) {
+        purchase[t] = proc.purchase[t]; gap[t] = proc.gap[t]; over[t] = proc.over[t];
+        totalPurchase += purchase[t]; totalCost += purchase[t] * (proc.price[t] || 0);
+        gapMwh += gap[t]; overMwh += over[t];
+      } else { purchase[t] = 0; gap[t] = 0; over[t] = 0; }
+    }
+    const Q = qW.reduce((a, v) => a + v, 0);
+    return { ...proc, purchase, gap, over, totalPurchase, totalCost, gapMwh, overMwh, coverage: Q > 0 ? totalPurchase / Q : 0 };
+  }
+
   /**
    * 覆盖汇总：按录入时间升序，细粒度覆盖粗粒度、同粒度后录入覆盖；
    * 只作用于新曲线实际填写的时段。旧曲线不物理删除（由上层管理 enabled）。
@@ -207,6 +233,7 @@
       over[t] = Math.max(purchase[t] - q[t], 0); overMwh += over[t];
     }
     const Q = q.reduce((a, b) => a + b, 0);
+    // 技术文档 CfD：超覆盖默认仍计采购成本（卖回现货只担价差）；params.oversellAsLoss=true 时按白买（亏全部价）
     return {
       purchase, price, source, rank, gap, over,
       totalPurchase, totalCost,
@@ -236,33 +263,73 @@
     if (!(wLt > 0)) throw new Error('中长期年度均价必须大于 0');
     if (!(K > 0)) throw new Error('K 因子必须为正');
 
+    // 签约窗口（年内新增用户：窗口外电量/采购不计入；年度用户=全年）
+    const win = args.window || (params.defaults && params.defaults.quoteWindow) || { from: '01-01', to: '12-31' };
+    const inWin = t => { const md = keys[t].slice(5, 10); return md >= win.from && md <= win.to; };
+    let winCount = 0;
+    for (let t = 0; t < keys.length; t++) if (inWin(t)) winCount++;
+    if (!winCount) throw new Error('签约窗口为空（' + win.from + ' ~ ' + win.to + '）');
+    const qW = q.map((v, t) => inWin(t) ? v : 0);
+
     const cm = params.costModel || {};
     const th = cm.riskThresholds || {};
-    const reserve = Number(cm.reservePerMwh || 0);
+    const reserve = 0;   // V2 起删除结构风险准备金（技术文档口径，不再计入）
     const gNorm = normalize(params.baseline.curve);
-    const Q = totalEnergy(q);
-    if (!(Q > 0)) throw new Error('客户全年电量必须大于 0');
+    const Q = totalEnergy(qW);
+    if (!(Q > 0)) throw new Error('签约窗口（' + win.from + ' ~ ' + win.to + '）内客户电量为 0，无法测算');
     const b = baselineCurve(Q, gNorm);
 
-    // 批发曲线汇总（无曲线 → 系统默认基准假设，明确标注）
-    const proc = buildProcurement(params.wholesaleCurves || [], q, keys, gNorm, {
+    // 批发曲线汇总（无曲线 → 系统默认基准假设，明确标注）；再按签约窗口裁剪
+    const proc0 = buildProcurement(params.wholesaleCurves || [], qW, keys, gNorm, {
       ratio: (params.defaults && params.defaults.coverageRatio != null) ? params.defaults.coverageRatio : 0.9,
       price: wLt
     });
+    // 默认假设 + 非全年窗口：采购改为窗口内 g 归一化分布（窗口外不留采购）
+    let proc = proc0;
+    const isFullWin = win.from === '01-01' && win.to === '12-31';
+    if (proc0.isDefault && !isFullWin) {
+      const r0 = Q > 0 ? proc0.totalPurchase / Q : 0.9;
+      const price0 = Number(cm.midYearPrice != null ? cm.midYearPrice : (proc0.weightedPrice || wLt));   // 年内新增：窗口内按后续中长期价（机会成本口径）
+      let winGsum = 0;
+      for (let t = 0; t < keys.length; t++) if (inWin(t)) winGsum += gNorm[t];
+      const purchase = new Array(keys.length).fill(0), gap = new Array(keys.length).fill(0), over = new Array(keys.length).fill(0);
+      let gapMwh = 0, overMwh = 0;
+      for (let t = 0; t < keys.length; t++) if (inWin(t) && winGsum > 0) {
+        purchase[t] = r0 * Q * gNorm[t] / winGsum;
+        gap[t] = Math.max(qW[t] - purchase[t], 0); gapMwh += gap[t];
+        over[t] = Math.max(purchase[t] - qW[t], 0); overMwh += over[t];
+      }
+      proc = { ...proc0, purchase, gap, over,
+        totalPurchase: r0 * Q, totalCost: r0 * Q * price0,
+        coverage: r0, gapMwh, overMwh };
+    } else {
+      proc = clipProcurementToWindow(proc0, inWin, qW);
+      // 年内新增 + 已有曲线：窗口内已有仓位按后续中长期均价重定价（机会成本口径）
+      if (!isFullWin && cm.midYearPrice != null && !proc.isDefault) {
+        const pNew = Number(cm.midYearPrice);
+        const purchase2 = proc.purchase.slice(), price2 = proc.price.slice();
+        let totalCost2 = 0;
+        for (let t = 0; t < keys.length; t++) if (inWin(t) && price2[t] != null) {
+          price2[t] = pNew; totalCost2 += purchase2[t] * pNew;
+        }
+        proc = { ...proc, price: price2, totalCost: totalCost2 };
+      }
+    }
 
     const wSum = params.scenarios.reduce((a, s) => a + Number(s.weight || 0), 0);
     if (Math.abs(wSum - 1) > 1e-6) {
       throw new Error('情景权重合计必须为 100%（当前 ' + (wSum * 100).toFixed(4) + '%），请在参数管理中修正');
     }
 
-    const Clt = proc.totalCost / Q;                       // 中长期成本（各情景相同）
+    const Clt = proc.totalCost / Q;                       // 中长期成本（窗口内，各情景相同）
     const Ebase = b.map((_, t) => proc.gapMwh * gNorm[t]); // 基准日前暴露曲线 E_base,t = E×g_t
 
     // 到户层「预测度电分摊」：售电公司承担（absorb）→ 计入全成本；客户承担（pass）→ 转嫁不计入
+    // 窗口化：qW 窗口外=0 → 年化只按窗口内月份电量加权
     let billAbsorb = 0;
     const bl = params.billLayer;
     if (bl && bl.item && bl.item.bearer !== 'pass' && Array.isArray(bl.item.monthly)) {
-      billAbsorb = annualizeMonthly(bl.item.monthly, q, keys).annual;
+      billAbsorb = annualizeMonthly(bl.item.monthly, qW, keys).annual;
     }
 
     const scenarios = params.scenarios.map(s => {
@@ -276,14 +343,20 @@
       const Wda = direct
         ? s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0)   // 展示：直接曲线的统调加权均价
         : W * Number(s.priceFactor == null ? 1 : s.priceFactor);
-      let Cda = 0, CVda = 0;
+      let Cda = 0, CVda = 0, oversellLoss = 0;
       for (let t = 0; t < q.length; t++) {
         Cda += proc.gap[t] * cal.curve[t];
         CVda += (proc.gap[t] - Ebase[t]) * cal.curve[t];      // 展示指标：日前曲线暴露
+        // 超覆盖：默认 CfD 口径（卖回现货，只担价差 (P_C − P_DA)×超量）；oversellAsLoss 时按白买（亏全部采购价）
+        if (proc.over[t] > 0) {
+          oversellLoss += cm.oversellAsLoss
+            ? proc.over[t] * (proc.price[t] || 0)                                     // 白买：亏全部采购价
+            : proc.over[t] * Math.max((proc.price[t] || 0) - cal.curve[t], 0);         // CfD：只担价差
+        }
       }
-      Cda /= Q; CVda /= Q;
-      const Cwholesale = Clt + Cda + alloc - refund;
-      const Csettle = Number(s.sr || 0), Ccredit = Number(s.o || 0);
+      Cda /= Q; CVda /= Q; oversellLoss /= Q;
+      const Cwholesale = Clt + Cda + alloc - refund + oversellLoss;   // CfD：超覆盖损失计入批发成本
+      const Csettle = Number(s.sr || 0), Ccredit = Number(s.o > 0 ? s.o : (cm.opsPerMwh != null ? cm.opsPerMwh : 6));   // 服务费：情景值>0 才用，否则取全局（默认 6）
       const Ctotal = Cwholesale + Csettle + Ccredit + reserve + billAbsorb;
       return {
         id: s.id, name: s.name, weight: Number(s.weight),
@@ -291,7 +364,7 @@
         allocShare: alloc, refundShare: refund,
         W_da: Wda, calibK: cal.k,
         Clt, Cda, CVda,
-        Cwholesale, Csettle, Ccredit, Creserve: reserve, CbillAbsorb: billAbsorb, Ctotal
+        Cwholesale, Csettle, Ccredit, Creserve: reserve, CbillAbsorb: billAbsorb, CoversellLoss: oversellLoss, Ctotal
       };
     });
 
@@ -358,7 +431,8 @@
           : '由 ' + ((params.wholesaleCurves || []).filter(c => c.enabled !== false).length) + ' 条有效批发曲线汇总；不把客户映射为公司真实采购合同'
       },
       scenarios, EC, tiers,
-      reserve, thresholds: th
+      reserve, thresholds: th,
+      window: win, isFullYear: win.from === '01-01' && win.to === '12-31'
     };
   }
 
@@ -499,7 +573,7 @@
   return {
     EPS, normalize, totalEnergy, baselineCurve, calibratePriceCurve,
     curveValue, curveValueContribs, exposureCost, weightedQuantile, weightedVaRCVaR,
-    computeQuote, unit, annualizeMonthly,
+    computeQuote, unit, annualizeMonthly, windowIndices,
     tofuAggregate, matchRetailCoeff, szTerminalLookup, peakValleyPrices, peakValleyRisks,
     GRAN_RANK, GRAN_NAME, expandCurve, buildProcurement
   };

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=21">
+<link rel="stylesheet" href="css/style.css?v=48">
 </head>
 <body>
 
@@ -59,67 +59,90 @@
         <div class="hint">日前统一结算点价格的年度锚点，保存入本次报价快照</div>
       </div>
       <div class="form-row">
-        <label>中长期年度均价 W_LT（元/MWh，可空）</label>
-        <input type="number" id="inpWLt" min="0.01" step="0.01" placeholder="留空则取 W；中长期合同分时价锚点">
-        <div class="hint">标准代理配置 QLT=r×Q×g<sub>t</sub> 的中长期合同价锚点（平坦分时），非真实合同匹配</div>
+        <label>客户签约模式 <span class="req">*</span></label>
+        <div class="inline" style="gap:14px;flex-wrap:wrap">
+          <label style="margin:0;font-weight:400"><input type="radio" name="signMode" value="full" checked> 年度用户（全年）</label>
+          <label style="margin:0;font-weight:400"><input type="radio" name="signMode" value="midyear"> 年内新增</label>
+          <select id="signStartMonth" disabled style="width:110px">
+            <option value="02">2月签入</option><option value="03">3月签入</option><option value="04">4月签入</option>
+            <option value="05">5月签入</option><option value="06">6月签入</option><option value="07">7月签入</option>
+            <option value="08">8月签入</option><option value="09" selected>9月签入</option><option value="10">10月签入</option>
+            <option value="11">11月签入</option><option value="12">12月签入</option>
+          </select>
+          <span id="midYearPriceWrap" class="hidden inline" style="gap:8px">后续中长期均价 <input type="number" id="midYearPrice" min="0" step="0.1" value="420" style="width:90px"> 元/MWh</span>
+        </div>
+        <div class="hint" id="signModeHint">年度用户：全年 01-01~12-31 窗口测算（现状）</div>
       </div>
-      <div class="form-row">
-        <label>中长期覆盖率（V1.4 起由批发曲线自动汇总）</label>
-        <div class="derived-box" id="rDerived">—</div>
-        <div class="hint">在「参数管理 → 批发曲线管理」录入采购曲线；无曲线时使用系统默认基准假设（r<sub>0</sub> 可在参数管理修改）</div>
-      </div>
-      <div class="form-row">
-        <label>合同价口径 <span class="req">*</span></label>
-        <span class="useg" id="segContract">
-          <label class="radio"><input type="radio" name="contractMode" value="pv" checked><span>峰平谷系数结算（默认）</span></label>
-          <label class="radio"><input type="radio" name="contractMode" value="flat"><span>全时段同价</span></label>
-        </span>
-        <div class="hint">仅当合同模板允许且结算模式明确为「全时段同价」时才可选择后者</div>
-      </div>
-      <div class="uc-title">用户分类（V1.1，决定峰谷系数与规则匹配）</div>
+      <div class="uc-title">零售侧收入结构（合同条款，依据零售侧收入设计文档 v1.0）</div>
       <div class="uc-grid">
-        <div><label>供电营业区 <span class="req">*</span></label>
-          <select id="ucArea">
-            <option value="gd">广东（非深圳）</option>
-            <option value="sz">深圳供电局区域</option>
-            <option value="sz_inc">深圳增量配电网</option>
+        <div><label>用户类型 <span class="req">*</span>（决定峰谷系数 f1/f2）</label>
+          <select id="rtUserType">
+            <option value="非深圳工业" selected>非深圳工业（f1=1.7 / f2=0.38）</option>
+            <option value="非深圳商业">非深圳商业（f1=f2=1）</option>
+            <option value="深圳工业">深圳工业（f1=1.53 / f2=0.32）</option>
+            <option value="深圳商业">深圳商业（f1=1.53 / f2=0.32）</option>
+            <option value="冰蓄冷">冰蓄冷（f1=1.65 / f2=0.25）</option>
           </select></div>
-        <div><label>原峰谷政策状态 <span class="req">*</span></label>
-          <select id="ucPv">
-            <option value="yes">原执行峰谷分时电价</option>
-            <option value="no">原不执行峰谷价格政策</option>
-            <option value="unknown">待核验</option>
-          </select></div>
-        <div><label>低压用户标识</label>
-          <select id="ucLv"><option value="no">否</option><option value="yes">是（深圳低压单列）</option></select></div>
-        <div><label>蓄冷用户认定</label>
-          <select id="ucIce"><option value="no">否</option><option value="yes">是（档案/供电口径认定）</option><option value="unknown">待核验</option></select></div>
-        <div><label>电压等级</label>
-          <select id="ucVoltage">
-            <option value="10kV">10kV</option>
-            <option value="&lt;1kV">1kV 以下（低压）</option>
-            <option value="20kV">20kV</option>
-            <option value="35kV">35kV</option>
-            <option value="110kV">110kV</option>
-            <option value="220kV及以上">220kV 及以上</option>
-          </select></div>
-        <div><label>供电计量方式</label>
-          <select id="ucMetering">
-            <option value="高供高计">高供高计</option>
-            <option value="高供低计">高供低计</option>
-            <option value="低供低计">低供低计</option>
-          </select></div>
-        <div><label>用电类别</label>
-          <select id="ucCategory">
-            <option value="普通工商业及其他">普通工商业及其他</option>
-            <option value="大量工商业及其他（101–3000kVA）">大量工商业及其他（101–3000kVA）</option>
-            <option value="高需求工商业及其他（≥3001kVA）">高需求工商业及其他（≥3001kVA）</option>
-          </select></div>
-        <div><label>容量（kVA，可选）</label>
-          <input type="number" id="ucCapacity" min="0" step="1" placeholder="用于类别一致性校验"></div>
+        <div><label>固定价格 · 电量占比 <span class="req">*</span></label>
+          <div class="inline"><input type="number" id="rtFixedRatio" min="0" max="100" step="0.1" value="100" style="width:90px"> %
+          <span class="hint" style="margin:0" id="rtRatioSum">+联动 0% = 100%</span></div></div>
       </div>
-      <div id="ucMatch"></div>
+      <div class="uc-grid" style="margin-top:10px">
+        <div class="uc-title" style="grid-column:1/-1;font-size:12px">市场联动（可选；与固定占比合计 100%；方式③≤20% 且与①②互斥）</div>
+        <div><label>联动方式</label>
+          <div class="inline" style="gap:10px;flex-wrap:wrap">
+            <label style="margin:0"><input type="checkbox" id="rtLink1"> ①月度交易综合价</label>
+            <label style="margin:0"><input type="checkbox" id="rtLink2"> ②月度集中竞争价</label>
+            <label style="margin:0"><input type="checkbox" id="rtLink3"> ③日前市场月度综合价</label>
+          </div></div>
+        <div id="rtLinkRows" style="grid-column:1/-1"></div>
+      </div>
+      <div class="uc-grid" style="margin-top:10px">
+        <div><label>煤电联动</label>
+          <div class="inline"><label style="margin:0"><input type="checkbox" id="rtCoalOn"> 启用</label></div></div>
+        <div><label>签约月 CECI（元/吨）</label><input type="number" id="rtCeciSign" step="1" value="834" disabled></div>
+        <div><label>结算月 CECI（元/吨）</label><input type="number" id="rtCeciSettle" step="1" value="940" disabled></div>
+        <div><label>煤电浮动单价（元/MWh，0-50）</label><input type="number" id="rtCoalPrice" min="0" max="50" step="0.01" value="30" disabled></div>
+        <div><label>浮动电费</label>
+          <div class="inline"><label style="margin:0"><input type="checkbox" id="rtFloatOn"> 启用</label></div></div>
+        <div><label>浮动单价（元/MWh，0-15）</label><input type="number" id="rtFloatPrice" min="0" max="15" step="0.01" value="12" disabled></div>
+        <div><label>绿电环境价值</label>
+          <div class="inline"><label style="margin:0"><input type="checkbox" id="rtGreenOn"> 启用</label></div></div>
+      </div>
+      <div id="rtGreenArea" class="uc-grid hidden" style="margin-top:6px">
+        <div class="uc-title" style="grid-column:1/-1;font-size:12px">绿电环境价值（可选）</div>
+        <div><label>交易电量模式</label>
+          <select id="rtGreenVolMode"><option value="ratio">按用电量比例</option><option value="fixed">按电量约定</option></select></div>
+        <div><label>约定比例（%，0-120）</label><input type="number" id="rtGreenRatio" min="0" max="120" step="0.1" value="100"></div>
+        <div><label>约定电量（MWh）</label><input type="number" id="rtGreenVolume" min="0" step="0.1" value="0" disabled></div>
+        <div><label>绿电实际用电量（MWh）</label><input type="number" id="rtGreenUsage" min="0" step="0.1" value="0"></div>
+        <div><label>固定价占比（%）</label><input type="number" id="rtGreenFRatio" min="0" max="100" step="0.1" value="100"></div>
+        <div><label>绿电固定价格（元/MWh，0-50）</label><input type="number" id="rtGreenFPrice" min="0" max="50" step="0.01" value="10"></div>
+        <div><label>联动占比（%）</label><input type="number" id="rtGreenLRatio" min="0" max="100" step="0.1" value="0"></div>
+        <div><label>环境价值均价（元/MWh）</label><input type="number" id="rtGreenLPrice" min="0" step="0.01" value="0"></div>
+        <div><label>考核方式</label><select id="rtGreenAssessMode"><option value="none">无</option><option value="month">按月</option><option value="contract">按合同有效期</option></select></div>
+        <div><label>考核系数（0-0.2）</label><input type="number" id="rtGreenAssessCoef" min="0" max="0.2" step="0.01" value="0"></div>
+        <div><label>补充交易电量（MWh）</label><input type="number" id="rtGreenSupVol" min="0" step="0.1" value="0"></div>
+        <div><label>补充交易价格（元/MWh）</label><input type="number" id="rtGreenSupPrice" min="0" step="0.01" value="0"></div>
+      </div>
+      <div class="hint" id="rtUsageAgg" style="margin:8px 0 0">峰/平/谷电量将在校验客户曲线后自动聚合显示（时段：峰 10-11、14-18；谷 0-7；其余为平）</div>
       <div class="form-row">
+        <label>客户用电输入方式</label>
+        <div class="inline" style="gap:14px;flex-wrap:wrap">
+          <label style="margin:0;font-weight:400"><input type="radio" name="inputMode" value="curve" checked> 8760 曲线</label>
+          <label style="margin:0;font-weight:400"><input type="radio" name="inputMode" value="simple"> 电量+峰平谷占比（快速测算）</label>
+        </div>
+      </div>
+      <div id="simpleArea" class="hidden form-row">
+        <div class="uc-grid">
+          <div><label>全年用电量（MWh）</label><input type="number" id="simpleTotal" min="1" step="1" value="100000"></div>
+          <div><label>峰占比</label><div class="inline"><input type="number" id="simplePeak" min="0" max="100" step="0.1" value="34" style="width:80px"> %</div></div>
+          <div><label>平占比</label><div class="inline"><input type="number" id="simpleFlat" min="0" max="100" step="0.1" value="38" style="width:80px"> %</div></div>
+          <div><label>谷占比</label><div class="inline"><input type="number" id="simpleValley" min="0" max="100" step="0.1" value="28" style="width:80px"> %</div></div>
+        </div>
+        <div class="hint" id="simpleHint">快速测算：按峰平谷占比生成典型日形状（段内均匀），全年 365 天同形。适合只有月度电量+峰谷结构、没有逐时曲线的客户。</div>
+      </div>
+      <div id="curveArea" class="form-row">
         <label>客户 8760 用电曲线 <span class="req">*</span></label>
         <textarea id="txtCurve" rows="9" placeholder="粘贴三列：日期、时刻(0–23)、用电量。支持从 Excel 直接粘贴；首行表头可有可无。&#10;示例：&#10;2026-01-01	0	1234.5&#10;2026-01-01	1	1180.2"></textarea>
         <div class="inline gap">
@@ -127,18 +150,7 @@
           <button class="btn btn-ghost" id="btnTemplate">下载 CSV 模板</button>
           <button class="btn btn-ghost" id="btnDemo">生成演示曲线</button>
         </div>
-        <div class="hint">支持 CSV/TXT 或直接上传 <b>.xlsx</b> 工作簿（自动识别日期/时刻/用电量列；解析后倒入上方文本框，仍需通过 8760 校验）</div>
-      </div>
-      <div class="form-row">
-        <label>用电量单位 <span class="req">*</span></label>
-        <div class="inline">
-          <span class="useg">
-            <label class="radio"><input type="radio" name="unit" value="kWh"><span>kWh</span></label>
-            <label class="radio"><input type="radio" name="unit" value="MWh"><span>MWh</span></label>
-          </span>
-          <span class="hint" id="unitGuess"></span>
-        </div>
-        <label class="checkbox"><input type="checkbox" id="chkUnitConfirm"> 我已确认单位选择正确（计算内部统一换算为 MWh）</label>
+        <div class="hint">单位 <b>MWh</b>；支持 CSV/TXT 或直接上传 <b>.xlsx</b> 工作簿（自动识别日期/时刻/电量列；解析后倒入上方文本框，仍需通过 8760 校验）</div>
       </div>
       <div class="actions">
         <button class="btn" id="btnValidate">① 校验曲线</button>
@@ -163,6 +175,8 @@
   <div id="quoteEmpty" class="empty">完成输入校验并点击「开始测算」后，此处展示三档报价。</div>
   <div id="quoteResult" class="hidden">
     <div id="redlineBanner"></div>
+    <div id="windowBanner"></div>
+    <div id="cfdResult"></div>
     <div class="tier-cards" id="tierCards"></div>
     <div class="hint center">三张报价卡并列展示：点击哪张，哪张加蓝框并展开完整构成（同时只展开一张）；再点一次或点 × 收起。总利润 = 签约价 − 全口径成本，正数=利润，负数=亏损。</div>
   </div>
@@ -183,7 +197,7 @@
       <div class="table-wrap"><table class="tbl" id="tblQuantiles"></table></div>
     </div>
     <div class="card" id="pvRiskCard" style="display:none">
-      <h2>峰谷平衡风险（单列，不计入三档价）</h2>
+      <h2>零售侧收入明细（电能量 + 峰谷平衡 + 绿电）</h2>
       <div id="pvRiskBody"></div>
     </div>
     <div class="card" id="billCard" style="display:none">
@@ -274,18 +288,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=21"></script>
-<script src="js/vendor/xlsx.full.min.js?v=21"></script>
-<script src="js/calc.js?v=21"></script>
-<script src="js/validate.js?v=21"></script>
-<script src="js/xlsx-import.js?v=21"></script>
-<script src="js/store.js?v=21"></script>
-<script src="js/charts.js?v=21"></script>
-<script src="js/export.js?v=21"></script>
-<script src="js/wc-template.js?v=21"></script>
-<script src="js/scenario-price.js?v=21"></script>
-<script src="js/wc-import8760.js?v=21"></script>
-<script src="js/wholesale.js?v=21"></script>
-<script src="js/app.js?v=21"></script>
+<script src="js/data.js?v=48"></script>
+<script src="js/vendor/xlsx.full.min.js?v=48"></script>
+<script src="js/calc.js?v=48"></script>
+<script src="js/retail.js?v=48"></script>
+<script src="js/breakeven.js?v=48"></script>
+<script src="js/validate.js?v=48"></script>
+<script src="js/xlsx-import.js?v=48"></script>
+<script src="js/store.js?v=48"></script>
+<script src="js/charts.js?v=48"></script>
+<script src="js/export.js?v=48"></script>
+<script src="js/wc-template.js?v=48"></script>
+<script src="js/scenario-price.js?v=48"></script>
+<script src="js/wc-import8760.js?v=48"></script>
+<script src="js/wholesale.js?v=48"></script>
+<script src="js/app.js?v=48"></script>
 </body>
 </html>
