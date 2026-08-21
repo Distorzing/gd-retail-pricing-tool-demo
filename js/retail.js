@@ -2,8 +2,8 @@
  * 零售侧收入计算引擎（依据《零售侧收入计算工具-设计文档》v1.0）
  *   零售收入 = 电能量电费（固定+联动+煤电+浮动）
  *            + 峰谷平衡净额（谷段补贴 − 峰段惩罚）
- *            + 绿电环境价值电费（电量+偏差+考核+补充）
- * 纯函数：calcRetail(input, usage) → { energy, peakValley, green, grandTotal, unitPrice, errors, formulas }
+ *            （绿电模块已删除，2026-08-21）
+ * 纯函数：calcRetail(input, usage) → { energy, peakValley, grandTotal, unitPrice, errors, formulas }（green 恒 0，兼容字段）
  * usage = { peak, flat, valley }（MWh，由调用方从 8760 曲线按时段聚合或直接录入）
  * ============================================================ */
 (function (root, factory) {
@@ -227,40 +227,8 @@
     F.push({ comp: '峰谷平衡·谷段补贴', seg: '谷', formula: Qv + ' MWh × ' + CONFIG.PV_REF_PRICE + ' × (1 − ' + tou.f2 + ') = ' + yuan(valleySubsidy) + ' 元' });
     F.push({ comp: '峰谷平衡·峰段惩罚', seg: '峰', formula: Qp + ' MWh × ' + CONFIG.PV_REF_PRICE + ' × (' + tou.f1 + ' − 1) = ' + yuan(peakPenalty) + ' 元' });
 
-    // ============ ③ 绿电环境价值 ============
-    const g = input.green || {};
-    let green = { effectiveVolume: 0, adjCoef: 1, weightedPrice: 0, energyFee: 0, deviationVolume: 0, deviationFee: 0, assessFee: 0, supplementFee: 0, total: 0 };
-    if (g.enabled) {
-      const actual = Number(g.actualGreenUsage) || 0;
-      let Q = g.volumeMode === 'fixed'
-        ? Math.min(Number(g.fixedVolume) || 0, actual * CONFIG.GREEN_VOLUME_CAP)
-        : actual * (Number(g.ratio) || 0);
-      green.effectiveVolume = Q;
-      const wt = Number(g.wholesaleTotal), up = Number(g.upperPriorityVolume);
-      green.adjCoef = (wt > 0 && up != null && Q > 0) ? Math.min(1, Math.max(0, (wt - up) / Q)) : 1;
-      const gfRatio = Number(g.fixedRatio) || 0, glRatio = Number(g.linkRatio) || 0;
-      if (Math.abs(gfRatio + glRatio - 1) > 1e-9) errors.push('绿电固定占比 ' + pct(gfRatio) + ' + 联动占比 ' + pct(glRatio) + ' ≠ 100%');
-      const gfPrice = Number(g.fixedPrice) || 0;
-      if (gfRatio > 0 && (gfPrice < 0 || gfPrice > CONFIG.GREEN_FIXED_PRICE_MAX)) {
-        errors.push('绿电固定价格 ' + gfPrice + ' 超出 [0, ' + CONFIG.GREEN_FIXED_PRICE_MAX + '] 元/MWh');
-      }
-      green.weightedPrice = gfRatio * gfPrice + glRatio * (Number(g.linkEnvPrice) || 0);
-      green.energyFee = Q * green.weightedPrice;
-      green.deviationVolume = Math.min(0, Q * green.adjCoef - Q);
-      green.deviationFee = green.deviationVolume * green.weightedPrice;
-      const coef = Number(g.assessCoef) || 0;
-      if (coef > CONFIG.GREEN_ASSESS_COEF_MAX + 1e-9) errors.push('绿电考核系数 ' + coef + ' 超过上限 0.2');
-      const assessVol = g.assessMode === 'none' ? 0 : Math.abs(green.deviationVolume);   // 月度考核=当月偏差；合同期=累计偏差（调用方累计后传入）
-      green.assessFee = g.assessMode === 'none' ? 0 : assessVol * green.weightedPrice * coef;
-      green.supplementFee = (Number(g.supplement && g.supplement.volume) || 0) * (Number(g.supplement && g.supplement.price) || 0);
-      green.total = green.energyFee + green.deviationFee + green.assessFee + green.supplementFee;
-      F.push({ comp: '绿电·电量电费', seg: '—', formula: Q + ' MWh × ' + green.weightedPrice.toFixed(2) + ' 元/MWh = ' + yuan(green.energyFee) + ' 元' });
-      if (green.deviationVolume < 0) F.push({ comp: '绿电·偏差电费', seg: '—', formula: green.deviationVolume.toFixed(2) + ' MWh × ' + green.weightedPrice.toFixed(2) + ' = ' + yuan(green.deviationFee) + ' 元' });
-      if (green.assessFee) F.push({ comp: '绿电·考核电费', seg: '—', formula: assessVol.toFixed(2) + ' × ' + green.weightedPrice.toFixed(2) + ' × ' + coef + ' = ' + yuan(green.assessFee) + ' 元' });
-      if (green.supplementFee) F.push({ comp: '绿电·补充交易', seg: '—', formula: (g.supplement.volume) + ' MWh × ' + g.supplement.price + ' = ' + yuan(green.supplementFee) + ' 元' });
-    }
-
-    const grandTotal = energyTotal + pvNet + green.total;
+    // 绿电环境价值：已完全删除（2026-08-21）
+    const grandTotal = energyTotal + pvNet;   // 绿电已删除
     return {
       usage: { peak: Qp, flat: Qf, valley: Qv, total: Qt },
       tou, k,
@@ -268,7 +236,7 @@
         coal: coalFee ? { seg: coalFee, total: coalTotal } : null,
         floatFee: ff.enabled ? { total: floatFeeTotal } : null, total: energyTotal },
       peakValley: { valleySubsidy, peakPenalty, net: pvNet },
-      green, grandTotal,
+      green: { total: 0 }, grandTotal,
       unitPrice: Qt > 0 ? grandTotal / Qt : 0,          // 元/MWh
       unitPriceYuanPerKwh: Qt > 0 ? grandTotal / Qt / 1000 : 0,
       errors, formulas: F
@@ -287,7 +255,7 @@
     const K = ((Number(u.peak) || 0) * tou.f1 + (Number(u.flat) || 0) * 1 + (Number(u.valley) || 0) * tou.f2) / (Qt || 1);
     const fixedRatio = Number(input.fixed && input.fixed.ratio) || 0;
     const slope = Qt * fixedRatio * K;                 // 元 / (元/MWh)
-    // 收入（P=0 时）= 联动 + 煤电 + 浮动 + 峰谷平衡 + 绿电
+    // 收入（P=0 时）= 联动 + 煤电 + 浮动 + 峰谷平衡
     const r0input = JSON.parse(JSON.stringify(input));
     r0input.fixed.flatPrice = 0;
     const r0 = calcRetail(r0input, usage);
@@ -317,9 +285,7 @@
       link: { modes: [{ type: 3, ratio: 0.1, flatPrice: 540 }] },
       coal: { enabled: true, ceciSign: 834, ceciSettle: 940, floatPrice: 30 },
       floatFee: { enabled: false, price: 0 },   // 2026 新规：固定+联动模式不签浮动费（PPT 原算例的 12 元/MWh 已按新规移除）
-      green: { enabled: true, volumeMode: 'ratio', ratio: 1.0, actualGreenUsage: 100,
-        fixedRatio: 1.0, fixedPrice: 10, linkRatio: 0, linkEnvPrice: null,
-        priority: 'A', assessMode: 'none', assessCoef: 0, supplement: { volume: 0, price: 0 } }
+      green: { enabled: false }
     };
   }
   const demoUsage = () => ({ peak: 200, flat: 500, valley: 300 });

@@ -49,8 +49,7 @@
         '<tr><td>固定价格结构</td><td>固定占比 ' + (retail.input.fixed.ratio * 100).toFixed(1) + '% @平段价 ' + retail.input.fixed.flatPrice + ' 元/MWh' +
         (retail.input.link.modes.length ? '；联动 ' + retail.input.link.modes.map(m => '方式' + m.type + ' ' + (m.ratio * 100).toFixed(1) + '%@' + m.flatPrice).join('、') : '') + '</td></tr>' +
         (retail.input.coal.enabled ? '<tr><td>煤电联动</td><td>CECI ' + retail.input.coal.ceciSign + '→' + retail.input.coal.ceciSettle + ' @浮动 ' + retail.input.coal.floatPrice + ' 元/MWh</td></tr>' : '') +
-        (retail.input.floatFee.enabled ? '<tr><td>浮动电费</td><td>' + retail.input.floatFee.price + ' 元/MWh</td></tr>' : '') +
-        (retail.input.green.enabled ? '<tr><td>绿电环境价值</td><td>已启用</td></tr>' : '');
+        (retail.input.floatFee.enabled ? '<tr><td>浮动电费</td><td>' + retail.input.floatFee.price + ' 元/MWh</td></tr>' : '');
     }
     return '';
   }
@@ -66,9 +65,8 @@
       ['浮动电费', r.energy.floatFee ? r.energy.floatFee.total : null],
       ['峰谷平衡·谷段补贴', r.peakValley.valleySubsidy],
       ['峰谷平衡·峰段惩罚', -r.peakValley.peakPenalty],
-      ['绿电环境价值', retail.input.green && retail.input.green.enabled ? r.green.total : null]
     ].filter(x => x[1] != null && Math.abs(x[1]) > 1e-9);
-    return '<h2>零售侧收入明细（电能量+峰谷平衡+绿电）</h2><table>' +
+    return '<h2>零售侧收入明细（电能量+峰谷平衡）</h2><table>' +
       '<tr><th>收入组件</th><th>金额（万元）</th><th>占比</th></tr>' +
       rows.map(x => '<tr><td>' + escH(x[0]) + '</td><td class="num">' + w(x[1]) + '</td><td class="num">' + (x[1] / r.grandTotal * 100).toFixed(1) + '%</td></tr>').join('') +
       '<tr><td><b>零售收入合计</b></td><td class="num"><b>' + w(r.grandTotal) + '</b></td><td class="num">100%</td></tr>' +

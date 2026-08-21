@@ -18,14 +18,14 @@ ok('浮动费用 = 0（2026 新规禁用）', !r.energy.floatFee, '浮动费应�
 ok('峰谷平衡补贴 8.6118 万', near(r.peakValley.valleySubsidy, 86118, 1));
 ok('峰谷平衡惩罚 6.482 万', near(r.peakValley.peakPenalty, 64820, 1));
 ok('峰谷平衡净额 = +2.1298 万', near(r.peakValley.net, 21298, 1));
-ok('绿电合计 = 0.1 万（100×10）', near(r.green.total, 1000, 1));
-ok('★ 零售收入 = 54.6044 万（2026 规则：去浮动费）', near(r.grandTotal, 546044, 2), (r.grandTotal / 10000).toFixed(4));
-ok('度电单价 = 0.5460 元/kWh', near(r.unitPriceYuanPerKwh, 0.54604, 1e-5));
+ok('绿电已完全删除（恒 0）', r.green.total === 0);
+ok('★ 零售收入 = 54.5044 万（2026 规则：去浮动费+删绿电）', near(r.grandTotal, 545044, 2), (r.grandTotal / 10000).toFixed(4));
+ok('度电单价 = 0.5450 元/kWh', near(r.unitPriceYuanPerKwh, 0.54504, 1e-5));
 ok('无校验错误', r.errors.length === 0, JSON.stringify(r.errors));
 
 console.log('\n[2] 盈亏平衡求解');
 // 成本 558044 元 → 盈亏平衡固定平段价应 = 520（收入=成本）
-const be = R.solveBreakEven(R.demoInput(), R.demoUsage(), 546044 / 1000);
+const be = R.solveBreakEven(R.demoInput(), R.demoUsage(), 545044 / 1000);
 ok('成本=收入时 盈亏平衡平段价=520', near(be.flatPrice, 520, 0.01), be.flatPrice);
 ok('代回利润=0', Math.abs(be.checkProfit) < 1, be.checkProfit);
 ok('K = (200×1.7+500+300×0.38)/1000 = 0.954', near(be.K, 0.954, 1e-9));
@@ -83,21 +83,11 @@ console.log('\n[4] 边界用例');
 const b1 = JSON.parse(JSON.stringify(R.demoInput())); b1.userType = '非深圳商业';
 const rb1 = R.calcRetail(b1, R.demoUsage());
 ok('非深圳商业（f1=f2=1）峰谷平衡净额=0', near(rb1.peakValley.net, 0));
-// 绿电约定电量 > 实际×1.2 → 截断
-const b2 = JSON.parse(JSON.stringify(R.demoInput()));
-b2.green.volumeMode = 'fixed'; b2.green.fixedVolume = 200; b2.green.actualGreenUsage = 100;
-const rb2 = R.calcRetail(b2, R.demoUsage());
-ok('绿电约定 200 > 100×1.2 → 有效电量=120', near(rb2.green.effectiveVolume, 120));
-// 批发侧不足 k<1 → 偏差
-const b3 = JSON.parse(JSON.stringify(R.demoInput()));
-b3.green.wholesaleTotal = 70; b3.green.upperPriorityVolume = 0;
-const rb3 = R.calcRetail(b3, R.demoUsage());
-ok('批发侧 70 < Q100 → k=0.7、偏差=−30 MWh', near(rb3.green.adjCoef, 0.7) && near(rb3.green.deviationVolume, -30));
-ok('偏差电费 = −30×10 = −300 元', near(rb3.green.deviationFee, -300));
-// 考核：月度偏差×系数
-const b4 = JSON.parse(JSON.stringify(b3)); b4.green.assessMode = 'month'; b4.green.assessCoef = 0.1;
-const rb4 = R.calcRetail(b4, R.demoUsage());
-ok('考核电费 = 30 MWh×10 元/MWh×0.1 = 30 元', near(rb4.green.assessFee, 30));
+// 绿电模块已完全删除：enabled=true 也无绿电收入
+const bG = JSON.parse(JSON.stringify(R.demoInput()));
+bG.green = { enabled: true, actualGreenUsage: 100, volumeMode: 'ratio', ratio: 1, fixedRatio: 1, fixedPrice: 10, linkRatio: 0 };
+const rbG = R.calcRetail(bG, R.demoUsage());
+ok('绿电 enabled=true 也不产生收入（模块已删）', rbG.green.total === 0 && near(rbG.grandTotal, 545044, 2));
 // CECI 负价差 trunc：结算 700 − 签约 834 = −134/100 = −1.34 → trunc = −1
 const b5 = JSON.parse(JSON.stringify(R.demoInput())); b5.coal.ceciSettle = 700;
 const rb5 = R.calcRetail(b5, R.demoUsage());

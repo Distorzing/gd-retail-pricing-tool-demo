@@ -462,7 +462,7 @@
     // V1.1 先行：峰谷系数（用户类型）与时段聚合，确定 K（窗口化电量）
     const pvPre = matchPeakValley(inp, qMWh);
 
-    // 零售侧收入（三模块：电能量 + 峰谷平衡 + 绿电）
+    // 零售侧收入（电能量 + 峰谷平衡；绿电已删除）
     const rtInput = rtRead();
     const retail = RetailCalc.calcRetail(rtInput, pvPre.usage);
     if (retail.errors.length) { alert('零售侧输入校验未通过：\n· ' + retail.errors.join('\n· ')); return; }
@@ -739,7 +739,7 @@
         '<div style="margin-top:10px"><b>盈亏平衡展开（零售收入 = 成本 → 解固定平段价）</b>' +
         '<div class="formula">K = f1×α峰 + α平 + f2×α谷 = ' + rt.result.tou.f1 + '×' + num(rt.result.usage.peak / rt.result.usage.total, 4) + ' + ' + num(rt.result.usage.flat / rt.result.usage.total, 4) + ' + ' + rt.result.tou.f2 + '×' + num(rt.result.usage.valley / rt.result.usage.total, 4) + ' = ' + num(be.K, 4) +
         '　→　P平 = (成本口径 ' + num(t.equiv) + ' − 峰谷平衡净额 ' + num(rt.result.peakValley.net / rt.result.usage.total) + '/MWh ÷ K 等) = <b>' + num(be.flatPrice) + '</b>；P峰 = ' + num(rt.result.tou.f1 * be.flatPrice) + '；P谷 = ' + num(rt.result.tou.f2 * be.flatPrice) + '</div>' +
-        '<div>零售等效均价 = ' + num(t.retail ? t.retail.unitPrice : 0) + ' 元/MWh（含峰谷平衡净额与绿电）· 代回利润 = ' + sgn(t.profitPerMwh) + ' 元/MWh ✓</div></div>';
+        '<div>零售等效均价 = ' + num(t.retail ? t.retail.unitPrice : 0) + ' 元/MWh（含峰谷平衡净额）· 代回利润 = ' + sgn(t.profitPerMwh) + ' 元/MWh ✓</div></div>';
     }
     const gateHtml =
       '<div style="margin-top:10px"><b>风险审批门槛（VaR/CVaR）</b>' +
@@ -854,7 +854,6 @@
       ['浮动电费', r.energy.floatFee ? r.energy.floatFee.total : null, null],
       ['峰谷平衡 · 谷段补贴', r.peakValley.valleySubsidy, null],
       ['峰谷平衡 · 峰段惩罚', -r.peakValley.peakPenalty, null],
-      ['绿电环境价值', state.retail.input.green.enabled ? r.green.total : null, null]
     ].filter(x => x[1] != null && Math.abs(x[1]) > 1e-9);
     const pctOf = v => (v / r.grandTotal * 100).toFixed(1) + '%';
     body.innerHTML = header +
