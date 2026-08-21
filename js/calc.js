@@ -357,10 +357,9 @@
         }
       }
       Cda /= Q; CVda /= Q; oversellLoss /= Q;
-      // 曲线价值 = 持仓现货均价 − 统调现货均价（同电量比较：调曲线前后的形状含金量差）
-      const daHold = proc.totalPurchase > 0 ? Gcurve / proc.totalPurchase : 0;
-      const daSys = gNorm.reduce((a, gv, t) => a + gv * cal.curve[t], 0);
-      Gcurve = daHold - daSys;   // 元/MWh；正=持仓买在比统调更贵的时段（调得好）
+      // 绝对差价收益 = Σ 持仓电量 × (日前价 − 持仓合约价) / Q
+      // （持仓按合约价锁定 vs 现货市场价的差价；正=锁得便宜，负=锁贵了）
+      Gcurve = Gcurve / Q - (proc.totalPurchase > 0 ? (proc.totalCost / Q) : 0);   // = Σpurchase×da/Q − Σpurchase×price/Q
       const Cwholesale = Clt + Cda + alloc - refund + oversellLoss;   // CfD：超覆盖损失计入批发成本
       const Csettle = Number(s.sr || 0), Ccredit = Number(s.o > 0 ? s.o : (cm.opsPerMwh != null ? cm.opsPerMwh : 6));   // 服务费：情景值>0 才用，否则取全局（默认 6）
       const Ctotal = Cwholesale + Csettle + Ccredit + reserve + billAbsorb;
