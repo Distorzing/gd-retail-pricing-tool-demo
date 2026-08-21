@@ -249,14 +249,27 @@
     const renderLinkRows = () => {
       const box = $('rtLinkRows');
       const modes = [['rtLink1', 1, '①月度交易综合价'], ['rtLink2', 2, '②月度集中竞争综合价'], ['rtLink3', 3, '③日前市场月度综合价']];
+      const saved = {};
+      box.querySelectorAll('input[data-lm]').forEach(i => { saved[i.dataset.lm] = i.value; });
       box.innerHTML = modes.map(([id, type, name]) => {
         const on = $(id).checked;
         if (!on) return '';
-        return '<div class="inline" style="gap:10px;margin:4px 0;flex-wrap:wrap"><span class="hint" style="margin:0">' + name +
+        const monthly = type === 1 || type === 2;   // ①②按月手填（月度竞价价）；③自动算
+        // 默认值：保留上次；无上次时 ①②=540、③空
+        let row = '<div style="margin:6px 0"><div class="inline" style="gap:10px;flex-wrap:wrap"><span class="hint" style="margin:0">' + name +
           '</span><label style="margin:0">占比 <input type="number" id="rtLink' + type + 'Ratio" min="0" max="100" step="0.1" value="10" style="width:80px"> %</label>' +
-          '<label style="margin:0">平段联动价 <input type="number" id="rtLink' + type + 'Price" min="0" step="0.01" value="540" style="width:100px"> 元/MWh</label></div>';
-      }).join('') || '<div class="hint" style="margin:4px 0">未勾选联动方式（纯固定价合同）</div>';
-      modes.forEach(([id]) => $(id).addEventListener('change', () => { renderLinkRows(); rtSumHint(); invalidateResult(); }));
+          (monthly ? '' : '<span class="hint" style="margin:0">价格=日前价月度综合（自动）</span>') + '</div>';
+        if (monthly) {
+          row += '<div class="inline" style="gap:8px;flex-wrap:wrap;margin-top:4px"><span class="hint" style="margin:0">各月联动价（元/MWh）：</span>';
+          for (let m = 1; m <= 12; m++) {
+            const key = type + '-' + m;
+            const v = saved[key] != null ? saved[key] : '540';
+            row += '<label style="margin:0">' + m + '月 <input type="number" data-lm="' + key + '" id="rtLink' + type + 'PriceM' + m + '" min="0" step="0.01" value="' + v + '" style="width:76px"></label>';
+          }
+          row += '</div>';
+        }
+        return row + '</div>';
+      }).join('') || '<div class="hint" style="margin:4px 0">未勾选联动方式</div>';
       box.querySelectorAll('input').forEach(i => i.addEventListener('input', () => { rtSumHint(); invalidateResult(); }));
       rtSumHint();
     };
@@ -464,7 +477,10 @@
 
     // 零售侧收入（电能量 + 峰谷平衡；绿电已删除）
     const rtInput = rtRead();
-    const retail = RetailCalc.calcRetail(rtInput, pvPre.usage);
+    // 逐月电量（联动①②按月价用）
+    const mu = new Array(12).fill(0);
+    { const ks = state.validation.series.keys; for (let t2 = 0; t2 < ks.length; t2++) mu[+ks[t2].slice(5, 7) - 1] += qMWh[t2]; }
+    const retail = RetailCalc.calcRetail(rtInput, pvPre.usage, mu);
     if (retail.errors.length) { alert('零售侧输入校验未通过：\n· ' + retail.errors.join('\n· ')); return; }
 
     let result;
@@ -488,13 +504,13 @@
     result.tiers.forEach(t => {
       // 技术文档 CfD 口径已并入 calc.js 默认计算（超覆盖卖回只担价差）；成本口径 = t.equiv（全成本分位 + M）
       const tierCost = t.equiv;   // 元/MWh
-      const be = RetailCalc.solveBreakEven(rtInput, pvPre.usage, tierCost);
+      const be = RetailCalc.solveBreakEven(rtInput, pvPre.usage, tierCost, mu);
       t.breakEven = be;
       // 用盈亏平衡平段价代入收入引擎，得到该档的收入侧数字
       const chkInput = JSON.parse(JSON.stringify(rtInput));
       if (be.flatPrice != null && be.flatPrice > 0) { chkInput.fixed.flatPrice = be.flatPrice; }
       else { chkInput.fixed.flatPrice = rtInput.fixed.flatPrice; t.breakEvenMiss = be.reason || null; }
-      t.retail = RetailCalc.calcRetail(chkInput, pvPre.usage);
+      t.retail = RetailCalc.calcRetail(chkInput, pvPre.usage, mu);
       // 三档价 = 盈亏平衡平段价（收入=成本+利润垫 M 反解）；该档零售利润应 = M（元/MWh）
       t.profitPerMwh = t.M;
       t.trialPrice = null;
@@ -550,8 +566,13 @@
     const linkModes = [];
     [['rtLink1', 1], ['rtLink2', 2], ['rtLink3', 3]].forEach(([id, type]) => {
       if ($(id).checked) {
-        let linkPrice = Number($('rtLink' + type + 'Price').value) || 0;
-        if (type === 3 && linkPrice <= 0) {
+        // ①②按月手填（12 个月）；③自动算（日前价月度综合）
+        let monthly = null, linkPrice = 0;
+        if (type === 1 || type === 2) {
+          monthly = [];
+          for (let m = 1; m <= 12; m++) monthly.push(Number($('rtLink' + type + 'PriceM' + m).value) || 0);
+          linkPrice = monthly.reduce((a, b) => a + b, 0) / 12;   // 展示用年均（计算用逐月）
+        } else {
           // 现货联动价 = 8760 日前价格按电量加权的月度综合价（自动，不手填）
           const keys = (state.validation && state.validation.series && state.validation.series.keys) || Validator.expectedHourKeys(state.params.meta.year);
           const da = state.params.scenarios[0].curve;
@@ -560,7 +581,7 @@
           for (let t2 = 0; t2 < keys.length; t2++) { const w = qArr ? qArr[t2] : 1; ws += w * da[t2]; qs += w; }
           linkPrice = qs > 0 ? ws / qs : 0;
         }
-        linkModes.push({ type, ratio: (Number($('rtLink' + type + 'Ratio').value) || 0) / 100, flatPrice: linkPrice });
+        linkModes.push({ type, ratio: (Number($('rtLink' + type + 'Ratio').value) || 0) / 100, flatPrice: linkPrice, monthly });
       }
     });
     const planMode = (document.querySelector('input[name=planMode]:checked') || {}).value || 'linkage';

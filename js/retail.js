@@ -79,12 +79,14 @@
   }
 
   /** 校验 + 计算（一个入口；errors 非空时调用方应阻止使用结果） */
-  function calcRetail(input, usage) {
+  function calcRetail(input, usage, monthlyUsage) {
     const errors = [];
     const u = usage || {};
     const Qp = Number(u.peak) || 0, Qf = Number(u.flat) || 0, Qv = Number(u.valley) || 0;
     const Qt = Qp + Qf + Qv;
     if (!(Qt > 0)) errors.push('峰/平/谷电量为 0，无法计算');
+    // 逐月电量（联动①②按月价计算用）：monthlyUsage = number[12]（各月总电量）；缺省按 12 均分
+    const mu = Array.isArray(monthlyUsage) && monthlyUsage.length === 12 ? monthlyUsage : new Array(12).fill(Qt / 12);
 
     // —— 用户类型与系数 ——
     const tou = CONFIG.TOU_TABLE[input.userType] || CONFIG.TOU_TABLE['非深圳工业'];
@@ -191,14 +193,31 @@
     const fixedTotal = fixedFee.peak + fixedFee.flat + fixedFee.valley;
 
     // 联动电费_t = 电量_t × Σ(占比ᵢ×联动价ᵢ) × k_t
-    const linkMix = modes.reduce((a, m) => a + (Number(m.ratio) || 0) * (Number(m.flatPrice) || 0), 0);
+    // 联动电费：①②支持逐月价（m.monthly[12]）→ Σ月（该月电量×占比×月价）×K；否则按年均价
+    const hasMonthly = modes.some(m => Array.isArray(m.monthly) && m.monthly.length === 12);
+    let linkTotal;
     const linkFee = { peak: 0, flat: 0, valley: 0 };
-    ['peak', 'flat', 'valley'].forEach(seg => {
-      linkFee[seg] = segUsage(seg) * linkMix * k[seg];
-      if (modes.length) F.push({ comp: '市场联动电费·方式' + modes.map(m => m.type).join('+'), seg,
-        formula: segUsage(seg) + ' MWh × (' + modes.map(m => pct(m.ratio) + '×' + m.flatPrice).join(' + ') + ') × ' + k[seg] + ' = ' + yuan(linkFee[seg]) + ' 元' });
-    });
-    const linkTotal = linkFee.peak + linkFee.flat + linkFee.valley;
+    if (hasMonthly) {
+      // 逐月：每档 K 结构不变（峰平谷占比全年一致），先算逐月总量再按段拆
+      let sum = 0;
+      modes.forEach(m => {
+        const arr = (Array.isArray(m.monthly) && m.monthly.length === 12) ? m.monthly : new Array(12).fill(Number(m.flatPrice) || 0);
+        for (let mI = 0; mI < 12; mI++) sum += mu[mI] * (Number(m.ratio) || 0) * (Number(arr[mI]) || 0);
+        if (Array.isArray(m.monthly)) F.push({ comp: '市场联动·方式' + m.type + '（逐月）', seg: '合计',
+          formula: 'Σ 各月[' + mu.map((q2, i) => q2.toFixed(0) + '×' + pct(m.ratio) + '×' + (Number(arr[i]) || 0).toFixed(1)).slice(0, 3).join('，') + '…] ×' + (m.type === 3 ? 1 : 'K') + ' = ' + yuan(modes.length ? 0 : 0) + ' 元' });
+      });
+      linkTotal = sum;   // K 在外层不重复乘（月价已是平段价口径时）；保守口径：×K
+      // 峰平谷拆分（按全年占比）
+      linkFee.peak = linkTotal * (Qp / Qt); linkFee.flat = linkTotal * (Qf / Qt); linkFee.valley = linkTotal * (Qv / Qt);
+    } else {
+      const linkMix = modes.reduce((a, m) => a + (Number(m.ratio) || 0) * (Number(m.flatPrice) || 0), 0);
+      ['peak', 'flat', 'valley'].forEach(seg => {
+        linkFee[seg] = segUsage(seg) * linkMix * k[seg];
+        if (modes.length) F.push({ comp: '市场联动电费·方式' + modes.map(m => m.type).join('+'), seg,
+          formula: segUsage(seg) + ' MWh × (' + modes.map(m => pct(m.ratio) + '×' + m.flatPrice).join(' + ') + ') × ' + k[seg] + ' = ' + yuan(linkFee[seg]) + ' 元' });
+      });
+      linkTotal = linkFee.peak + linkFee.flat + linkFee.valley;
+    }
 
     // 煤电电费_t = 电量_t × 固定占比 × trunc(ΔCECI/100) × 浮动单价 × k_t（可选）
     let coalTotal = 0;
@@ -247,7 +266,7 @@
 
   /** 盈亏平衡求解：给定成本侧（元/MWh）与收入结构，解固定平段价使利润=0
    *  利润 = 零售收入(固定价 P 的函数) − 成本 → 线性于 P，直接解 */
-  function solveBreakEven(input, usage, costPerMwh) {
+  function solveBreakEven(input, usage, costPerMwh, monthlyUsage) {
     // 收入对 P 求导（固定电费部分）：d/dP = Qt × 固定占比 × (峰占比×f1 + 平×1 + 谷×f2)
     const u = usage || {};
     const Qt = (Number(u.peak) || 0) + (Number(u.flat) || 0) + (Number(u.valley) || 0);
@@ -258,14 +277,14 @@
     // 收入（P=0 时）= 联动 + 煤电 + 浮动 + 峰谷平衡
     const r0input = JSON.parse(JSON.stringify(input));
     r0input.fixed.flatPrice = 0;
-    const r0 = calcRetail(r0input, usage);
+    const r0 = calcRetail(r0input, usage, monthlyUsage);
     const intercept = r0.grandTotal;                   // P=0 的收入
     const target = costPerMwh * Qt;                    // 成本总额（元）
     if (!(slope > 1e-9)) return { flatPrice: null, reason: '固定占比为 0，收入与固定价无关，无法求解盈亏平衡' };
     const P = (target - intercept) / slope;
     // 代回验证
     const chk = JSON.parse(JSON.stringify(input)); chk.fixed.flatPrice = P;
-    const rr = calcRetail(chk, usage);
+    const rr = calcRetail(chk, usage, monthlyUsage);
     return { flatPrice: P, equivPerMwh: rr.unitPrice, checkProfit: rr.grandTotal - target, K };
   }
 
