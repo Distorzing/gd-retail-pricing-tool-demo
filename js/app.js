@@ -474,7 +474,7 @@
       const total = Number($('simpleTotal').value) || 0;
       const ap = (Number($('simplePeak').value) || 0) / 100, af = (Number($('simpleFlat').value) || 0) / 100, av = (Number($('simpleValley').value) || 0) / 100;
       if (!(total > 0) || Math.abs(ap + af + av - 1) > 1e-6) { alert('快速模式：全年用电量须 >0，峰+平+谷占比须 = 100%（当前 ' + ((ap + af + av) * 100).toFixed(1) + '%）'); return; }
-      const tou = (typeof BreakEven !== 'undefined' && BreakEven.CONFIG.TOU_HOURS) || { peak: [10,11,14,15,16,17,18], flat: [8,9,12,13,19,20,21,22,23], valley: [0,1,2,3,4,5,6,7] };
+      const tou = (typeof POLICY !== 'undefined' && POLICY.TOU_HOURS) || { peak: [10,11,14,15,16,17,18], flat: [8,9,12,13,19,20,21,22,23], valley: [0,1,2,3,4,5,6,7] };
       const day = new Array(24).fill(0);
       tou.peak.forEach(h => day[h] = ap / tou.peak.length);
       tou.flat.forEach(h => day[h] = af / tou.flat.length);

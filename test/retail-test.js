@@ -78,6 +78,15 @@ const b0f = JSON.parse(JSON.stringify(R.demoInput()));
 b0f.planMode = 'fair'; b0f.wholesaleAvg = 380; b0f.floatFee = { enabled: true, price: 6 };
 ok('平价套餐+浮动费 6 > 5 → 拦截', R.calcRetail(b0f, R.demoUsage()).errors.some(e => e.indexOf('超出') >= 0));
 
+console.log('\n[3c] 逐月/非逐月一致性（K 修正校验）');
+const usageC = { peak: 3400, flat: 3800, valley: 2800 };
+const muC = new Array(12).fill(10000 / 12);
+const monthlyC = new Array(12).fill(540);
+const ra = R.calcRetail({ userType: '非深圳工业', fixed: { ratio: 0.85, flatPrice: 450 }, link: { modes: [{ type: 1, ratio: 0.15, flatPrice: 540 }] }, coal: { enabled: false }, floatFee: { enabled: false }, green: { enabled: false } }, usageC);
+const rb = R.calcRetail({ userType: '非深圳工业', fixed: { ratio: 0.85, flatPrice: 450 }, link: { modes: [{ type: 1, ratio: 0.15, flatPrice: 540, monthly: monthlyC }] }, coal: { enabled: false }, floatFee: { enabled: false }, green: { enabled: false } }, usageC, muC);
+ok('逐月（全月同价）与非逐月联动收入一致（×K 修正）', Math.abs(ra.energy.linked.total - rb.energy.linked.total) < 0.01,
+   ra.energy.linked.total.toFixed(2) + ' vs ' + rb.energy.linked.total.toFixed(2));
+
 console.log('\n[4] 边界用例');
 // 非深圳商业 f1=f2=1 → 峰谷平衡净额 0
 const b1 = JSON.parse(JSON.stringify(R.demoInput())); b1.userType = '非深圳商业';

@@ -7,32 +7,13 @@
  * usage = { peak, flat, valley }（MWh，由调用方从 8760 曲线按时段聚合或直接录入）
  * ============================================================ */
 (function (root, factory) {
-  if (typeof module !== 'undefined' && module.exports) { module.exports = factory(); }
-  else { root.RetailCalc = factory(); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module !== 'undefined' && module.exports) { module.exports = factory(require('./policy.js')); }
+  else { root.RetailCalc = factory(root.POLICY); }
+})(typeof self !== 'undefined' ? self : this, function (POLICY) {
   'use strict';
 
-  // 政策常量（CONFIG 一处集中，政策调整只改这里）
-  const CONFIG = {
-    TOU_TABLE: {                                   // 用户类型 → {f1 峰, f2 谷}
-      '非深圳工业': { f1: 1.7, f2: 0.38 },
-      '非深圳商业': { f1: 1.0, f2: 1.0 },
-      '深圳工业': { f1: 1.53, f2: 0.32 },
-      '深圳商业': { f1: 1.53, f2: 0.32 },
-      '冰蓄冷': { f1: 1.65, f2: 0.25 }
-    },
-    TOU_PERIODS: { peak: '10-11、14-18', flat: '8-9、12-13、19-23', valley: '0-7' },
-    FIXED_PRICE_MIN: 372, FIXED_PRICE_MAX: 554,    // 元/MWh（0.372~0.554 元/kWh）
-    LINK_MIN_RATIO: 0.10, LINK_MAX_RATIO: 0.30,     // 联动总比例 10%~30%（2026 新规）
-    LINK_SPOT_MIN_RATIO: 0.08, LINK_SPOT_MAX_RATIO: 0.15,   // 联动现货（日前月度综合价）8%~15%
-    COAL_FLOAT_MIN: 0, COAL_FLOAT_MAX: 50,         // 元/MWh
-    FLOAT_FEE_MIN: 0, FLOAT_FEE_MAX: 5,             // 浮动费用（仅平价套餐，0~5 元/MWh = 0~0.005 元/kWh，2026 新规）
-    PV_REF_PRICE: 463,                             // 峰谷平衡市场参考价 元/MWh（0.463 元/kWh）
-    GREEN_FIXED_PRICE_MAX: 50,                     // 元/MWh
-    GREEN_VOLUME_CAP: 1.2,                         // ≤ 实际用电量×1.2
-    GREEN_ASSESS_COEF_MAX: 0.2,
-    CECI_ROUND_MODE: 'trunc'                       // trunc | floor | round（PPT 算例 (940−834)/100=1.06→1）
-  };
+  // 政策常量：全部来自 policy.js 单源（政策调整只改 policy.js）
+  const CONFIG = POLICY;
 
   /**
    * 市场风控条款（2026 新规§3）：平段结算价 vs 结算月批发均价（逐月判断）
@@ -107,7 +88,6 @@
         F.push({ comp: '平价套餐·' + (seg === 'peak' ? '峰' : seg === 'flat' ? '平' : '谷'), seg,
           formula: segUsage2(seg) + ' MWh × (' + wa + ' + ' + fp + ') × ' + k[seg] + ' = ' + yuan(segUsage2(seg) * Pping * k[seg]) + ' 元' });
       });
-      const total = Qt * Pping;   // 峰平谷加权 = Pping × K×Qt… 全电量×(均价+浮动)×1（平价套餐均价口径按平段电量价，峰谷仍按系数）
       const grand = (Qp * Pping * k.peak) + (Qf * Pping) + (Qv * Pping * k.valley);
       const guard = riskGuard(Pping, wa);
       return {
@@ -206,7 +186,9 @@
         if (Array.isArray(m.monthly)) F.push({ comp: '市场联动·方式' + m.type + '（逐月）', seg: '合计',
           formula: 'Σ 各月[' + mu.map((q2, i) => q2.toFixed(0) + '×' + pct(m.ratio) + '×' + (Number(arr[i]) || 0).toFixed(1)).slice(0, 3).join('，') + '…] ×' + (m.type === 3 ? 1 : 'K') + ' = ' + yuan(modes.length ? 0 : 0) + ' 元' });
       });
-      linkTotal = sum;   // K 在外层不重复乘（月价已是平段价口径时）；保守口径：×K
+      // 联动价是平段价格口径 → 必须按峰谷系数折算（×K），与非逐月分支一致
+      const Kagg = (Qp * k.peak + Qf * k.flat + Qv * k.valley) / Qt;   // 全电量峰谷折算系数
+      linkTotal = sum * Kagg;
       // 峰平谷拆分（按全年占比）
       linkFee.peak = linkTotal * (Qp / Qt); linkFee.flat = linkTotal * (Qf / Qt); linkFee.valley = linkTotal * (Qv / Qt);
     } else {
