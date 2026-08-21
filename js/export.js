@@ -121,11 +121,11 @@
 
       '<h2>三、两部制成本拆分（中长期+日前，单位：元/MWh）</h2><table>' +
       '<tr><th>情景</th><th>权重</th><th>W_da</th><th>标定<br>系数k</th><th>中长期<br>Clt</th><th>日前缺口<br>Cda</th>' +
-      '<th>分摊−<br>返还</th><th>结算<br>SR</th><th>信用<br>服务</th><th>准备金</th><th>C总</th>' + tierHeads + '</tr>' +
+      '<th>曲线价值<br>CV*</th><th>分摊−<br>返还</th><th>结算<br>SR</th><th>信用<br>服务</th><th>准备金</th><th>C总</th>' + tierHeads + '</tr>' +
       scenarioRows(r) +
-      '<tr><td><b>加权期望 E[C总]</b></td><td class="num">100%</td><td colspan="9"></td><td class="num"><b>' + f2(r.EC) + '</b></td>' +
+      '<tr><td><b>加权期望 E[C总]</b></td><td class="num">100%</td><td colspan="8"></td><td class="num"><b>' + signed(r.scenarios.reduce((a, s) => a + s.weight * s.CVda, 0)) + '</b></td><td class="num"><b>' + f2(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num"><b>' + signed(t.expectedProfit) + '</b></td>').join('') + '</tr></table>' +
-      '<div class="meta">Πs = 零售收入单价 − C总,s；亏损概率、VaR/CVaR 按情景权重计算，不假设正态分布。C_LT=Σ(有效采购电量×采购价) 由批发曲线汇总；日前缺口 E_t=max(Q_t−Q_LT,t,0)，C_DA,s=Σ(E_t×P_DA,s,t)。本口径不含实时价格与日前—实时偏差电费。</div>' +
+      '<div class="meta">Πs = 零售收入单价 − C总,s；亏损概率、VaR/CVaR 按情景权重计算，不假设正态分布。C_LT=Σ(有效采购电量×采购价) 由批发曲线汇总；日前缺口 E_t=max(Q_t−Q_LT,t,0)，C_DA,s=Σ(E_t×P_DA,s,t)。曲线价值 CV=Σ(缺口−统调基准缺口)×P_DA/Q，仅展示、已含于 C_DA，不重复计入。本口径不含实时价格与日前—实时偏差电费。</div>' +
 
       pvSection(ctx.pv, ctx.retail) +
       billSection(bill, billAdd, r) +
@@ -163,6 +163,7 @@
         '<td class="num">' + f2(s.calibK, 4) + '</td>' +
         '<td class="num">' + f2(s.Clt) + '</td>' +
         '<td class="num">' + f2(s.Cda) + '</td>' +
+        '<td class="num">' + signed(s.CVda) + '</td>' +
         '<td class="num">' + signed(s.allocShare - s.refundShare) + '</td>' +
         '<td class="num">' + f2(s.Csettle) + '</td>' +
         '<td class="num">' + f2(s.Ccredit) + '</td>' +

@@ -825,12 +825,14 @@
     $('analysisSummary').innerHTML =
       chip('预期全成本 E[C总]', num(r.EC) + ' 元/MWh', 'blue') +
       chip('中长期 / 日前缺口', num(wAvg(s => s.Clt)) + ' / ' + num(wAvg(s => s.Cda)), '') +
+      chip('曲线价值 CV（情景加权）', sgn(wAvg(s => s.CVda)) + ' 元/MWh',
+           wAvg(s => s.CVda) > 0 ? 'red' : (wAvg(s => s.CVda) < 0 ? 'green' : '')) +
       chip('覆盖率（采购均价）', (r.procurement.coverage * 100).toFixed(1) + '%（' + num(r.procurement.weightedPrice) + '）' + (r.procurement.isDefault ? '·默认假设' : ''), '') +
       chip('日前市场缺口', r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh', r.procurement.gapMwh > 0 ? 'red' : 'green') +
       chip('K 因子', state.pv && state.pv.K != null ? num(state.pv.K, 4) : '—', '');
 
     let head = '<tr><th>情景</th><th class="num">权重</th><th class="num">W_da</th><th class="num">标定<br>系数k</th>' +
-      '<th class="num">中长期<br>Clt</th><th class="num">日前缺口<br>Cda</th>' +
+      '<th class="num">中长期<br>Clt</th><th class="num">日前缺口<br>Cda</th><th class="num">曲线价值<br>CV*</th>' +
       '<th class="num">服务费</th><th class="num">度电<br>分摊</th><th class="num">C总</th>' +
       r.tiers.map(t => '<th class="num">' + esc(t.name) + '<br>利润</th>').join('') + '</tr>';
     let body = r.scenarios.map(s => {
@@ -840,15 +842,16 @@
       }).join('');
       return '<tr><td>' + esc(s.name) + '</td><td class="num">' + (s.weight * 100).toFixed(2) + '%</td>' +
         '<td class="num">' + num(s.W_da) + '</td><td class="num">' + num(s.calibK, 4) + '</td>' +
-        '<td class="num">' + num(s.Clt) + '</td><td class="num">' + num(s.Cda) + '</td>' +
+        '<td class="num">' + num(s.Clt) + '</td><td class="num">' + num(s.Cda) + '</td><td class="num ' + clsSigned(s.CVda) + '">' + sgn(s.CVda) + '</td>' +
         '<td class="num">' + num(s.Ccredit) + '</td>' +
         '<td class="num">' + num(s.CbillAbsorb) + '</td>' +
         '<td class="num"><b>' + num(s.Ctotal) + '</b></td>' + cells + '</tr>';
     }).join('');
     body += '<tr class="ecl"><td><b>加权期望</b></td><td class="num">100%</td><td colspan="2"></td>' +
-      '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td>' +
+      '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td><td class="num ' + clsSigned(wAvg(s => s.CVda)) + '"><b>' + sgn(wAvg(s => s.CVda)) + '</b></td>' +
       '<td class="num"><b>' + num(wAvg(s => s.Ccredit)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.CbillAbsorb)) + '</b></td><td class="num"><b>' + num(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num ' + clsProfit(t.expectedProfit) + '"><b>' + sgn(t.expectedProfit) + '</b></td>').join('') + '</tr>';
+    body += '<tr><td colspan="13" class="hint" style="text-align:left">* 曲线价值 CV = Σ(日前缺口 − 统调基准缺口)×P_DA / Q：已包含在「日前缺口 Cda」成本内，仅作解释、不重复计列（正=曲线推高成本，负=曲线优势；缺口时段越偏高日前价时段，CV 越正）。逐时明细见「曲线解释」页签。</td></tr>';
     $('tblScenarios').innerHTML = head + body;
 
     $('tblQuantiles').innerHTML =
