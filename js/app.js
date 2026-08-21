@@ -833,7 +833,7 @@
     $('analysisSummary').innerHTML =
       chip('预期全成本 E[C总]', num(r.EC) + ' 元/MWh', 'blue') +
       chip('中长期 / 日前缺口', num(wAvg(s => s.Clt)) + ' / ' + num(wAvg(s => s.Cda)), '') +
-      chip('绝对差价收益（情景加权）', sgn(wAvg(s => s.Gcurve)) + ' 元/MWh',
+      chip('曲线价值（绝对差价收益，情景加权）', sgn(wAvg(s => s.Gcurve)) + ' 元/MWh',
            wAvg(s => s.Gcurve) > 0 ? 'green' : (wAvg(s => s.Gcurve) < 0 ? 'red' : '')) +
       chip('覆盖率（采购均价）', (r.procurement.coverage * 100).toFixed(1) + '%（' + num(r.procurement.weightedPrice) + '）' + (r.procurement.isDefault ? '·默认假设' : ''), '') +
       chip('日前市场缺口', r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh', r.procurement.gapMwh > 0 ? 'red' : 'green') +

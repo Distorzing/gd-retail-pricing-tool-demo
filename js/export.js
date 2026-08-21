@@ -121,7 +121,7 @@
 
       '<h2>三、两部制成本拆分（中长期+日前，单位：元/MWh）</h2><table>' +
       '<tr><th>情景</th><th>权重</th><th>W_da</th><th>标定<br>系数k</th><th>中长期<br>Clt</th><th>日前缺口<br>Cda</th>' +
-      '<th>绝对差价<br>收益*</th><th>分摊−<br>返还</th><th>结算<br>SR</th><th>信用<br>服务</th><th>准备金</th><th>C总</th>' + tierHeads + '</tr>' +
+      '<th>曲线价值<br>绝对差价收益*</th><th>分摊−<br>返还</th><th>结算<br>SR</th><th>信用<br>服务</th><th>准备金</th><th>C总</th>' + tierHeads + '</tr>' +
       scenarioRows(r) +
       '<tr><td><b>加权期望 E[C总]</b></td><td class="num">100%</td><td colspan="8"></td><td class="num"><b>' + signed(r.scenarios.reduce((a, s) => a + s.weight * s.Gcurve, 0)) + '</b></td><td class="num"><b>' + f2(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num"><b>' + signed(t.expectedProfit) + '</b></td>').join('') + '</tr></table>' +
