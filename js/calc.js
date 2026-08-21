@@ -347,8 +347,8 @@
       for (let t = 0; t < q.length; t++) {
         Cda += proc.gap[t] * cal.curve[t];
         CVda += (proc.gap[t] - Ebase[t]) * cal.curve[t];      // 展示指标：日前曲线暴露
-        // 曲线价值（你的口径）：持仓曲线相对现货价的差价收益 = Σ 持仓 × (日前价 − 持仓价) / Q
-        if (proc.purchase[t] > 0) Gcurve += proc.purchase[t] * (cal.curve[t] - (proc.price[t] || 0));
+        // 曲线价值（用户口径：调曲线前后价值差）：DA_持仓 − DA_统调（同电量形状的现货均价差）
+        if (proc.purchase[t] > 0) Gcurve += proc.purchase[t] * cal.curve[t];   // 先累加持仓现货价值
         // 超覆盖：默认 CfD 口径（卖回现货，只担价差 (P_C − P_DA)×超量）；oversellAsLoss 时按白买（亏全部采购价）
         if (proc.over[t] > 0) {
           oversellLoss += cm.oversellAsLoss
@@ -356,7 +356,11 @@
             : proc.over[t] * Math.max((proc.price[t] || 0) - cal.curve[t], 0);         // CfD：只担价差
         }
       }
-      Cda /= Q; CVda /= Q; Gcurve /= Q; oversellLoss /= Q;
+      Cda /= Q; CVda /= Q; oversellLoss /= Q;
+      // 曲线价值 = 持仓现货均价 − 统调现货均价（同电量比较：调曲线前后的形状含金量差）
+      const daHold = proc.totalPurchase > 0 ? Gcurve / proc.totalPurchase : 0;
+      const daSys = gNorm.reduce((a, gv, t) => a + gv * cal.curve[t], 0);
+      Gcurve = daHold - daSys;   // 元/MWh；正=持仓买在比统调更贵的时段（调得好）
       const Cwholesale = Clt + Cda + alloc - refund + oversellLoss;   // CfD：超覆盖损失计入批发成本
       const Csettle = Number(s.sr || 0), Ccredit = Number(s.o > 0 ? s.o : (cm.opsPerMwh != null ? cm.opsPerMwh : 6));   // 服务费：情景值>0 才用，否则取全局（默认 6）
       const Ctotal = Cwholesale + Csettle + Ccredit + reserve + billAbsorb;
