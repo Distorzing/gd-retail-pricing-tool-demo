@@ -825,8 +825,8 @@
     $('analysisSummary').innerHTML =
       chip('预期全成本 E[C总]', num(r.EC) + ' 元/MWh', 'blue') +
       chip('中长期 / 日前缺口', num(wAvg(s => s.Clt)) + ' / ' + num(wAvg(s => s.Cda)), '') +
-      chip('曲线价值 CV（情景加权）', sgn(wAvg(s => s.CVda)) + ' 元/MWh',
-           wAvg(s => s.CVda) > 0 ? 'red' : (wAvg(s => s.CVda) < 0 ? 'green' : '')) +
+      chip('曲线价值 G_curve（情景加权）', sgn(wAvg(s => s.Gcurve)) + ' 元/MWh',
+           wAvg(s => s.Gcurve) > 0 ? 'green' : (wAvg(s => s.Gcurve) < 0 ? 'red' : '')) +
       chip('覆盖率（采购均价）', (r.procurement.coverage * 100).toFixed(1) + '%（' + num(r.procurement.weightedPrice) + '）' + (r.procurement.isDefault ? '·默认假设' : ''), '') +
       chip('日前市场缺口', r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh', r.procurement.gapMwh > 0 ? 'red' : 'green') +
       chip('K 因子', state.pv && state.pv.K != null ? num(state.pv.K, 4) : '—', '');
@@ -851,7 +851,7 @@
       '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td><td class="num ' + clsSigned(wAvg(s => s.CVda)) + '"><b>' + sgn(wAvg(s => s.CVda)) + '</b></td>' +
       '<td class="num"><b>' + num(wAvg(s => s.Ccredit)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.CbillAbsorb)) + '</b></td><td class="num"><b>' + num(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num ' + clsProfit(t.expectedProfit) + '"><b>' + sgn(t.expectedProfit) + '</b></td>').join('') + '</tr>';
-    body += '<tr><td colspan="13" class="hint" style="text-align:left">* 曲线价值 CV = Σ(日前缺口 − 统调基准缺口)×P_DA / Q：已包含在「日前缺口 Cda」成本内，仅作解释、不重复计列（正=曲线推高成本，负=曲线优势；缺口时段越偏高日前价时段，CV 越正）。逐时明细见「曲线解释」页签。</td></tr>';
+    body += '<tr><td colspan="13" class="hint" style="text-align:left">* 曲线价值 G_curve = Σ 持仓电量 × (日前价 − 持仓价) / Q：持仓曲线相对现货的差价收益（正=持仓曲线买在高价时段=调整得好，负=买在低价时段）；已含于批发成本，仅作解释、不重复计列。逐时明细见「曲线解释」页签。</td></tr>';
     $('tblScenarios').innerHTML = head + body;
 
     $('tblQuantiles').innerHTML =

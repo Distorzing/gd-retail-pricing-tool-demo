@@ -343,10 +343,12 @@
       const Wda = direct
         ? s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0)   // 展示：直接曲线的统调加权均价
         : W * Number(s.priceFactor == null ? 1 : s.priceFactor);
-      let Cda = 0, CVda = 0, oversellLoss = 0;
+      let Cda = 0, CVda = 0, Gcurve = 0, oversellLoss = 0;
       for (let t = 0; t < q.length; t++) {
         Cda += proc.gap[t] * cal.curve[t];
         CVda += (proc.gap[t] - Ebase[t]) * cal.curve[t];      // 展示指标：日前曲线暴露
+        // 曲线价值（你的口径）：持仓曲线相对现货价的差价收益 = Σ 持仓 × (日前价 − 持仓价) / Q
+        if (proc.purchase[t] > 0) Gcurve += proc.purchase[t] * (cal.curve[t] - (proc.price[t] || 0));
         // 超覆盖：默认 CfD 口径（卖回现货，只担价差 (P_C − P_DA)×超量）；oversellAsLoss 时按白买（亏全部采购价）
         if (proc.over[t] > 0) {
           oversellLoss += cm.oversellAsLoss
@@ -354,7 +356,7 @@
             : proc.over[t] * Math.max((proc.price[t] || 0) - cal.curve[t], 0);         // CfD：只担价差
         }
       }
-      Cda /= Q; CVda /= Q; oversellLoss /= Q;
+      Cda /= Q; CVda /= Q; Gcurve /= Q; oversellLoss /= Q;
       const Cwholesale = Clt + Cda + alloc - refund + oversellLoss;   // CfD：超覆盖损失计入批发成本
       const Csettle = Number(s.sr || 0), Ccredit = Number(s.o > 0 ? s.o : (cm.opsPerMwh != null ? cm.opsPerMwh : 6));   // 服务费：情景值>0 才用，否则取全局（默认 6）
       const Ctotal = Cwholesale + Csettle + Ccredit + reserve + billAbsorb;
@@ -363,7 +365,7 @@
         priceFactor: Number(s.priceFactor == null ? 1 : s.priceFactor),
         allocShare: alloc, refundShare: refund,
         W_da: Wda, calibK: cal.k,
-        Clt, Cda, CVda,
+        Clt, Cda, CVda, Gcurve,
         Cwholesale, Csettle, Ccredit, Creserve: reserve, CbillAbsorb: billAbsorb, CoversellLoss: oversellLoss, Ctotal
       };
     });
