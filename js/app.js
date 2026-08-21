@@ -26,6 +26,7 @@
     if (workP) {
       state.params = workP;
       state.activeVersionId = workP.meta.versionId;
+      state.workParamsActive = true;   // 工作参数生效中：loadVersion 不覆盖
     }
     refreshVersionSelect(state.activeVersionId || BUILTIN_PARAMS.meta.versionId);
     bindInputSection();
@@ -95,14 +96,8 @@
         '<option value="' + esc(v.meta.versionId) + '">' + esc(v.meta.versionName) + tag + '｜' + esc(v.meta.versionId) + '</option>');
     });
     sel.value = selectId || versions()[0].meta.versionId;
-    // 有工作参数（即改即用恢复的）时，不覆盖；只更新版本徽章显示
-    if (state.params && state.activeVersionId === sel.value) {
-      const v = state.params;
-      $('activeVersionBadge').textContent = '参数版本 ' + v.meta.versionId + '（工作值）';
-    } else {
-      loadVersion(sel.value);
-    }
-    sel.onchange = () => { loadVersion(sel.value); invalidateResult(); };
+    loadVersion(sel.value);   // 内部判断 keepWork：有工作参数时不覆盖
+    sel.onchange = () => { state.workParamsActive = false; loadVersion(sel.value); invalidateResult(); };
   }
 
   /** 当前工作参数自动持久化（即改即用时存，刷新恢复；非固化，只是保留你正在用的值） */
@@ -120,10 +115,16 @@
   }
 
   function loadVersion(versionId) {
-    const v = versions().find(x => x.meta.versionId === versionId) || versions()[0];
-    state.params = deepCopy(v);
+    // 即改即用恢复的工作参数：init 已把 state.params 设为工作值 → 保留不覆盖（手动切换版本时清除标记后覆盖）
+    const keepWork = state.params && state.workParamsActive;
+    const list = versions();
+    const v = keepWork ? state.params : (list.find(x => x.meta.versionId === versionId) || list[0] || BUILTIN_PARAMS);
+    if (!keepWork) {
+      if (!v) return;   // 防御：无可用参数版本
+      state.params = deepCopy(v); state.workParamsActive = false;
+    }
     state.activeVersionId = v.meta.versionId;
-    $('activeVersionBadge').textContent = '参数版本 ' + v.meta.versionId;
+    $('activeVersionBadge').textContent = '参数版本 ' + v.meta.versionId + (keepWork ? '（工作值）' : '');
     $('activeVersionBadge').title = v.meta.versionName + '（生效 ' + (v.meta.effectiveDate || '—') + '）';
     const wSumV = v.scenarios.reduce((a, s) => a + Number(s.weight || 0), 0);
     $('sbVersion').innerHTML = '<b>' + esc(v.meta.versionId) + (v.meta.versionId === BUILTIN_PARAMS.meta.versionId ? '（内置）' : '') + '</b><br>' +
@@ -163,6 +164,30 @@
   }
 
   /* ================= A+B 输入与校验 ================= */
+  /** 曲线历史：localStorage 记住上次曲线，刷新自动回填 */
+  const CURVE_LS = 'pt-last-curve';
+  function saveCurveHistory() {
+    try {
+      const txt = $('txtCurve').value;
+      if (txt && txt.trim().length > 100) {
+        localStorage.setItem(CURVE_LS, JSON.stringify({ text: txt, at: Store.now() }));
+      }
+    } catch (e) { /* 超容量忽略 */ }
+  }
+  function loadCurveHistory() {
+    try {
+      const raw = localStorage.getItem(CURVE_LS);
+      if (!raw) return;
+      const h = JSON.parse(raw);
+      if (h && h.text && !$('txtCurve').value.trim()) {
+        $('txtCurve').value = h.text;
+        invalidateValidation();
+        const hint = $('unitGuess');
+        if (hint) hint.textContent = '已载入上次曲线（' + (h.at || '') + '）；点「校验曲线」后可测算';
+      }
+    } catch (e) { /* 忽略 */ }
+  }
+
   function bindInputSection() {
     $('btnValidate').addEventListener('click', runValidation);
     $('btnCompute').addEventListener('click', runCompute);
