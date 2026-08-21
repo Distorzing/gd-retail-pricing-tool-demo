@@ -840,7 +840,7 @@
       chip('K 因子', state.pv && state.pv.K != null ? num(state.pv.K, 4) : '—', '');
 
     let head = '<tr><th>情景</th><th class="num">权重</th><th class="num">W_da</th><th class="num">标定<br>系数k</th>' +
-      '<th class="num">中长期<br>Clt</th><th class="num">日前缺口<br>Cda</th><th class="num">绝对差价<br>收益*</th>' +
+      '<th class="num">中长期<br>Clt</th><th class="num">日前缺口<br>Cda</th><th class="num">曲线价值<br>（绝对差价收益）*</th>' +
       '<th class="num">服务费</th><th class="num">度电<br>分摊</th><th class="num">C总</th>' +
       r.tiers.map(t => '<th class="num">' + esc(t.name) + '<br>利润</th>').join('') + '</tr>';
     let body = r.scenarios.map(s => {
