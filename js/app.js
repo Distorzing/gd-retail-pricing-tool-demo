@@ -214,6 +214,8 @@
       const wInp = $('inpW');
       if (wInp) { wInp.disabled = mid; wInp.placeholder = mid ? '年内新增不需要（用后续中长期均价）' : '手工输入，必须大于 0，如 372'; }
       const wp = $('midYearPriceWrap'); if (wp) wp.classList.toggle('hidden', !mid);
+      const mmp = $('midMonthPrices'); if (mmp) mmp.classList.toggle('hidden', !mid);
+      if (mid) renderMidMonthPrices();
       if (mid) { const mp = $('midYearPrice'); if (mp && !mp.value) mp.value = 420; }
       const mm = $('signStartMonth').value;
       $('signModeHint').textContent = mid
@@ -223,6 +225,7 @@
       updateComputeEnabled();
     }));
     $('signStartMonth').addEventListener('change', () => {
+      renderMidMonthPrices();
       const mid = (document.querySelector('input[name=signMode]:checked') || {}).value === 'midyear';
       $('signModeHint').textContent = mid
         ? '年内新增：仅按 ' + $('signStartMonth').value + ' 月 1 日 ~ 12 月 31 日窗口测算；窗口外电量与已订中长期不计入（增量成本口径），缺口走日前或窗口内新增曲线'
@@ -289,10 +292,40 @@
       signMode: (document.querySelector('input[name=signMode]:checked') || {}).value || 'full',
       signStartMonth: $('signStartMonth') ? $('signStartMonth').value : '09',
       midYearPrice: Number($('midYearPrice') ? $('midYearPrice').value : 420) || 420,
+      monthlyWholesale: readMidMonthPrices(),
     };
   }
 
   /** 签约窗口：年度=全年；年内新增=起始月 1 日 ~ 12-31 */
+  /** 年内新增：渲染新增月起~12月各月批发均价输入（默认=8760日前价月度综合） */
+  function renderMidMonthPrices() {
+    const box = $('midMonthPriceInputs');
+    if (!box) return;
+    const startM = +($('signStartMonth') ? $('signStartMonth').value : 9);
+    // 日前价月度综合价（简单月内平均）
+    const da = state.params.scenarios && state.params.scenarios[0] ? state.params.scenarios[0].curve : null;
+    const keys = Validator.expectedHourKeys(state.params.meta.year);
+    const mAvg = new Array(12).fill(0), mCnt = new Array(12).fill(0);
+    if (da) keys.forEach((k, t) => { const m = +k.slice(5, 7) - 1; mAvg[m] += da[t]; mCnt[m]++; });
+    const prev = {};
+    box.querySelectorAll('input[data-mmp]').forEach(i => { prev[i.dataset.mmp] = i.value; });
+    let html = '';
+    for (let m = startM; m <= 12; m++) {
+      const def = da && mCnt[m - 1] ? (mAvg[m - 1] / mCnt[m - 1]) : 380;
+      const val = prev[m] != null ? prev[m] : def.toFixed(1);
+      html += '<label style="margin:0;font-weight:400">' + m + '月 <input type="number" data-mmp="' + m + '" min="0" step="0.1" value="' + val + '" style="width:84px"></label>';
+    }
+    box.innerHTML = html;
+    box.querySelectorAll('input[data-mmp]').forEach(i => i.addEventListener('input', () => { invalidateResult(); }));
+  }
+
+  /** 读取逐月批发均价 → { '09': 300.7, '10': 270.2, ... } */
+  function readMidMonthPrices() {
+    const out = {};
+    document.querySelectorAll('input[data-mmp]').forEach(i => { out[i.dataset.mmp] = Number(i.value) || 0; });
+    return out;
+  }
+
   function signWindow(inp) {
     const isFull = !inp || inp.signMode !== 'midyear';
     if (isFull) return { from: '01-01', to: '12-31', isFull: true };
@@ -462,17 +495,6 @@
       if (be.flatPrice != null && be.flatPrice > 0) { chkInput.fixed.flatPrice = be.flatPrice; }
       else { chkInput.fixed.flatPrice = rtInput.fixed.flatPrice; t.breakEvenMiss = be.reason || null; }
       t.retail = RetailCalc.calcRetail(chkInput, pvPre.usage);
-      // 市场风控条款（2026 新规§3）：平段结算价 vs 批发均价（用日前价按客户电量加权近似）
-      {
-        const keys = state.validation.series.keys;
-        const da = state.params.scenarios[0].curve;
-        let ws = 0, qs = 0;
-        for (let t2 = 0; t2 < keys.length; t2++) { ws += qMWh[t2] * da[t2]; qs += qMWh[t2]; }
-        const wholesaleAvg = qs > 0 ? ws / qs : 0;
-        const beP = be.flatPrice != null ? be.flatPrice : 0;
-        t.retail.riskGuard = RetailCalc.riskGuard(beP, wholesaleAvg);
-        t.retail.wholesaleAvg = wholesaleAvg;
-      }
       // 三档价 = 盈亏平衡平段价（收入=成本+利润垫 M 反解）；该档零售利润应 = M（元/MWh）
       t.profitPerMwh = t.M;
       t.trialPrice = null;
@@ -531,9 +553,9 @@
         let linkPrice = Number($('rtLink' + type + 'Price').value) || 0;
         if (type === 3 && linkPrice <= 0) {
           // 现货联动价 = 8760 日前价格按电量加权的月度综合价（自动，不手填）
-          const keys = state.validation.series.keys;
+          const keys = (state.validation && state.validation.series && state.validation.series.keys) || Validator.expectedHourKeys(state.params.meta.year);
           const da = state.params.scenarios[0].curve;
-          const qArr = state.qMWh && state.qMWh.length === keys.length ? state.qMWh : null;
+          const qArr = (state.qMWh && state.qMWh.length === keys.length) ? state.qMWh : null;
           let ws = 0, qs = 0;
           for (let t2 = 0; t2 < keys.length; t2++) { const w = qArr ? qArr[t2] : 1; ws += w * da[t2]; qs += w; }
           linkPrice = qs > 0 ? ws / qs : 0;
@@ -664,7 +686,7 @@
         '<div class="tier-pvg"><span>峰 <b>' + num(tou.f1 * pPing) + '</b></span><span>平 <b>' + num(pPing) + '</b></span><span>谷 <b>' + num(tou.f2 * pPing) + '</b></span></div>' +
         '<div class="equiv">零售等效均价 ' + num(equiv) + '（' + num(equiv / 1000, 4) + ' 元/度）· 全成本 ' + num(t.equiv) + '</div>' +
         feeLine +
-        (t.retail && t.retail.riskGuard ? '<div class="tier-k" style="color:' + (t.retail.riskGuard.applied ? 'var(--orange)' : 'var(--muted)') + '">🛡 风控条款：' + esc(t.retail.riskGuard.note) + (t.retail.riskGuard.applied ? '（结算平段价=' + num(t.retail.riskGuard.Pping) + '）' : '') + '</div>' : '') +
+
         '<div class="tier-k">' + (be.K != null ? 'K=' + num(be.K, 4) + ' · ' : '') + 'f1=' + tou.f1 + ' / f2=' + tou.f2 + alphaTxt +
         (be.flatPrice == null && be.reason ? ' · ⚠ ' + esc(be.reason) : '') + '</div>';
       card.innerHTML =

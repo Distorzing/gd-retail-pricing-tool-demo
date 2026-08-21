@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=57">
+<link rel="stylesheet" href="css/style.css?v=62">
 </head>
 <body>
 
@@ -70,6 +70,10 @@
             <option value="11">11月签入</option><option value="12">12月签入</option>
           </select>
           <span id="midYearPriceWrap" class="hidden inline" style="gap:8px">后续中长期均价 <input type="number" id="midYearPrice" min="0" step="0.1" value="420" style="width:90px"> 元/MWh</span>
+        </div>
+        <div id="midMonthPrices" class="hidden" style="margin-top:8px">
+          <div class="hint" style="margin:0 0 6px">新增月起~12 月各月批发均价（元/MWh，默认按日前价格月度综合自动算出，可改）：</div>
+          <div id="midMonthPriceInputs" class="inline" style="gap:10px;flex-wrap:wrap"></div>
         </div>
         <div class="hint" id="signModeHint">年度用户：全年 01-01~12-31 窗口测算（现状）</div>
       </div>
@@ -285,20 +289,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=57"></script>
-<script src="js/vendor/xlsx.full.min.js?v=57"></script>
-<script src="js/calc.js?v=57"></script>
-<script src="js/retail.js?v=57"></script>
-<script src="js/breakeven.js?v=57"></script>
-<script src="js/validate.js?v=57"></script>
-<script src="js/xlsx-import.js?v=57"></script>
-<script src="js/store.js?v=57"></script>
-<script src="js/charts.js?v=57"></script>
-<script src="js/export.js?v=57"></script>
-<script src="js/wc-template.js?v=57"></script>
-<script src="js/scenario-price.js?v=57"></script>
-<script src="js/wc-import8760.js?v=57"></script>
-<script src="js/wholesale.js?v=57"></script>
-<script src="js/app.js?v=57"></script>
+<script src="js/data.js?v=62"></script>
+<script src="js/vendor/xlsx.full.min.js?v=62"></script>
+<script src="js/calc.js?v=62"></script>
+<script src="js/retail.js?v=62"></script>
+<script src="js/breakeven.js?v=62"></script>
+<script src="js/validate.js?v=62"></script>
+<script src="js/xlsx-import.js?v=62"></script>
+<script src="js/store.js?v=62"></script>
+<script src="js/charts.js?v=62"></script>
+<script src="js/export.js?v=62"></script>
+<script src="js/wc-template.js?v=62"></script>
+<script src="js/scenario-price.js?v=62"></script>
+<script src="js/wc-import8760.js?v=62"></script>
+<script src="js/wholesale.js?v=62"></script>
+<script src="js/app.js?v=62"></script>
 </body>
 </html>

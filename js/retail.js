@@ -35,22 +35,47 @@
   };
 
   /**
-   * 市场风控条款（2026 新规§3）：平段结算价 vs 结算月批发均价
-   *  - 高于批发均价 15% 以上 → 用户只付 批发均价×115%（超出部分售电公司承担）
-   *  - 低于批发均价 20% 以上 → 用户付 批发均价×80%（低于部分售电公司享有）
-   * @param Pping 平段结算价（元/MWh） @param wholesaleAvg 月批发均价（元/MWh）
+   * 市场风控条款（2026 新规§3）：平段结算价 vs 结算月批发均价（逐月判断）
+   *  - 高于批发均价 15% 以上 → 该月用户只付 批发均价×115%（超出部分售电公司承担）
+   *  - 低于批发均价 20% 以上 → 该月用户付 批发均价×80%（低于部分售电公司享有）
    */
-  function riskGuard(Pping, wholesaleAvg) {
+  function riskGuard(Pping, wholesaleAvg) {   // 单值版（向后兼容/单月）
     if (!(wholesaleAvg > 0) || !(Pping > 0)) return { applied: false, Pping, note: '未触发（无批发均价数据）' };
     if (Pping > wholesaleAvg * 1.15) {
       return { applied: true, type: 'cap', Pping: wholesaleAvg * 1.15, saving: Pping - wholesaleAvg * 1.15,
-        note: '平段价高于批发均价 15% → 用户按批发均价×115% 结算，超出部分售电公司承担（用户可单方解约）' };
+        note: '平段价高于批发均价 15% → 按批发均价×115% 结算（结算价=' + (wholesaleAvg * 1.15).toFixed(1) + '），超出部分售电公司承担' };
     }
     if (Pping < wholesaleAvg * 0.80) {
       return { applied: true, type: 'floor', Pping: wholesaleAvg * 0.80, gain: wholesaleAvg * 0.80 - Pping,
-        note: '平段价低于批发均价 20% → 用户按批发均价×80% 结算，低于部分售电公司享有' };
+        note: '平段价低于批发均价 20% → 按批发均价×80% 结算（结算价=' + (wholesaleAvg * 0.80).toFixed(1) + '），低于部分售电公司享有' };
     }
-    return { applied: false, Pping, note: '未触发（批发均价×80% ≤ 平段价 ≤ ×115%）' };
+    return { applied: false, Pping, note: '未触发（批发均价 ' + wholesaleAvg.toFixed(1) + ' ×80%~115% 区间内）' };
+  }
+
+  /**
+   * 逐月风控：返回每月实际平段结算价与月度损益
+   * @param Pping 合同平段价 @param monthlyFlat 12 月各月平段电量 @param monthlyWholesale 12 月各月批发均价（{ '01': 310, ... } 或 number[12]）
+   * @returns { monthly: [{month, cap, floor, actual, clamped, delta}], totalDelta, appliedMonths }
+   *   delta>0 = 售电公司多收（按下限）；delta<0 = 售电公司少收（按上限，亏损）
+   */
+  function riskGuardMonthly(Pping, monthlyFlat, monthlyWholesale) {
+    const out = [];
+    let totalDelta = 0, applied = 0;
+    for (let m = 1; m <= 12; m++) {
+      const wa = Array.isArray(monthlyWholesale) ? monthlyWholesale[m - 1] : monthlyWholesale[String(m).padStart(2, '0')];
+      const qf = Array.isArray(monthlyFlat) ? monthlyFlat[m - 1] : (monthlyFlat || [])[m - 1];
+      if (!(wa > 0) || !(qf > 0)) { out.push({ month: m, wa: wa || 0, qf: qf || 0, actual: Pping, clamped: false, delta: 0 }); continue; }
+      const cap = wa * 1.15, floor = wa * 0.80;
+      let actual = Pping, clamped = false, type = null;
+      if (Pping > cap) { actual = cap; clamped = true; type = 'cap'; }
+      else if (Pping < floor) { actual = floor; clamped = true; type = 'floor'; }
+      const delta = (actual - Pping) * qf;   // 售电公司多收(+)/少收(−)
+      totalDelta += delta;
+      if (clamped) applied++;
+      out.push({ month: m, wa, qf, cap, floor, actual, clamped, type, delta });
+    }
+    return { monthly: out, totalDelta, appliedMonths: applied,
+      note: applied ? applied + ' 个月触发风控（实际结算价偏离合同价）' : '全年未触发风控' };
   }
 
   /** 校验 + 计算（一个入口；errors 非空时调用方应阻止使用结果） */
@@ -293,5 +318,5 @@
   }
   const demoUsage = () => ({ peak: 200, flat: 500, valley: 300 });
 
-  return { CONFIG, calcRetail, solveBreakEven, riskGuard, demoInput, demoUsage };
+  return { CONFIG, calcRetail, solveBreakEven, riskGuard, riskGuardMonthly, demoInput, demoUsage };
 });
