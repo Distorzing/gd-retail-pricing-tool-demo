@@ -242,7 +242,7 @@
       $('fairArea').classList.toggle('hidden', !fair);
       $('linkageArea').classList.toggle('hidden', fair);
       $('planModeHint').textContent = fair
-        ? '平价套餐：全电量按月批发均价+浮动费用（0~5 元/MWh）；峰谷仍按用户类型系数；风控条款自动适用。'
+        ? '平价套餐：全电量按月批发均价+浮动费用（0~5 元/MWh）；峰谷仍按用户类型系数。'
         : '固定+联动：固定 372~554，联动总比例 10%~30%（现货联动 8%~15%），2026 不签浮动费用（可加煤电联动）。';
       invalidateResult();
     }));
