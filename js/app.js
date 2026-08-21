@@ -833,7 +833,9 @@
     $('analysisSummary').innerHTML =
       chip('预期全成本 E[C总]', num(r.EC) + ' 元/MWh', 'blue') +
       chip('中长期 / 日前缺口', num(wAvg(s => s.Clt)) + ' / ' + num(wAvg(s => s.Cda)), '') +
-      chip('曲线价值（绝对差价收益，情景加权）', sgn(wAvg(s => s.Gcurve)) + ' 元/MWh',
+      chip('曲线价值 ΔV（调曲线前后差）', sgn(wAvg(s => s.curveValue)) + ' 元/MWh',
+           wAvg(s => s.curveValue) > 0 ? 'green' : (wAvg(s => s.curveValue) < 0 ? 'red' : '')) +
+      chip('绝对差价收益', sgn(wAvg(s => s.Gcurve)) + ' 元/MWh',
            wAvg(s => s.Gcurve) > 0 ? 'green' : (wAvg(s => s.Gcurve) < 0 ? 'red' : '')) +
       chip('覆盖率（采购均价）', (r.procurement.coverage * 100).toFixed(1) + '%（' + num(r.procurement.weightedPrice) + '）' + (r.procurement.isDefault ? '·默认假设' : ''), '') +
       chip('日前市场缺口', r.procurement.gapMwh.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) + ' MWh', r.procurement.gapMwh > 0 ? 'red' : 'green') +
@@ -850,13 +852,13 @@
       }).join('');
       return '<tr><td>' + esc(s.name) + '</td><td class="num">' + (s.weight * 100).toFixed(2) + '%</td>' +
         '<td class="num">' + num(s.W_da) + '</td><td class="num">' + num(s.calibK, 4) + '</td>' +
-        '<td class="num">' + num(s.Clt) + '</td><td class="num">' + num(s.Cda) + '</td><td class="num ' + clsSigned(s.CVda) + '">' + sgn(s.CVda) + '</td>' +
+        '<td class="num">' + num(s.Clt) + '</td><td class="num">' + num(s.Cda) + '</td><td class="num ' + clsSigned(s.Gcurve) + '">' + sgn(s.Gcurve) + '</td>' +
         '<td class="num">' + num(s.Ccredit) + '</td>' +
         '<td class="num">' + num(s.CbillAbsorb) + '</td>' +
         '<td class="num"><b>' + num(s.Ctotal) + '</b></td>' + cells + '</tr>';
     }).join('');
     body += '<tr class="ecl"><td><b>加权期望</b></td><td class="num">100%</td><td colspan="2"></td>' +
-      '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td><td class="num ' + clsSigned(wAvg(s => s.CVda)) + '"><b>' + sgn(wAvg(s => s.CVda)) + '</b></td>' +
+      '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td><td class="num ' + clsSigned(wAvg(s => s.Gcurve)) + '"><b>' + sgn(wAvg(s => s.Gcurve)) + '</b></td>' +
       '<td class="num"><b>' + num(wAvg(s => s.Ccredit)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.CbillAbsorb)) + '</b></td><td class="num"><b>' + num(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num ' + clsProfit(t.expectedProfit) + '"><b>' + sgn(t.expectedProfit) + '</b></td>').join('') + '</tr>';
     body += '<tr><td colspan="13" class="hint" style="text-align:left">* 绝对差价收益 = Σ 持仓电量 × (日前价 − 持仓合约价) / Q（元/MWh）：持仓按合约价锁定 vs 现货市场价的差价（正=锁得便宜、负=锁贵了）。已含于批发成本，仅作解释、不重复计列。</td></tr>';
