@@ -29,7 +29,7 @@ const mini = {
   tiers: [
     { key: 'conservative', name: '保守价', q: 0.95, M: 20 },
     { key: 'target', name: '目标价', q: 0.90, M: 10 },
-    { key: 'aggressive', name: '冲单价', q: 0.80, M: 5, recommended: true }
+    { key: 'target', name: '微利价', q: 0.90, M: 5, recommended: true }
   ],
   redLines: {}
 };
@@ -43,7 +43,7 @@ ok('Cda=177.5（日前缺口层）', near(r1.scenarios[0].Cda, 177.5));
 ok('C总=C批发+SR+O=303.5（V2 删准备金）', near(r1.scenarios[0].Ctotal, 303.5));
 ok('保守价=(C95+20)/K=323.5', near(r1.tiers[0].price, 323.5));
 ok('目标价=(C90+10)/K=313.5', near(r1.tiers[1].price, 313.5));
-ok('冲单价=(C80+5)/K=308.5', near(r1.tiers[2].price, 308.5));
+ok('微利价=(C90+5)/K=308.5', near(r1.tiers[2].price, 308.5));
 ok('冲单预期利润=5', near(r1.tiers[2].expectedProfit, 5));
 ok('元/度=元/MWh ÷1000', near(Calc.unit.toYuanPerKwh(308.5), 0.3085));
 ok('分/度=元/MWh ÷10', near(Calc.unit.toFenPerKwh(308.5), 30.85));
@@ -131,7 +131,7 @@ const q8760 = keys.map(k => {
 const r7 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1, params: PARAMS });
 ok('全量计算产出三档价', r7.tiers.length === 3 && r7.tiers.every(t => isFinite(t.price) && t.price > 0));
 ok('每档含 Cq/M/P平 与 VaR/CVaR', r7.tiers.every(t => isFinite(t.Cq) && isFinite(t.M) && isFinite(t.Pping) && isFinite(t.VaR) && isFinite(t.CVaR)));
-ok('冲单价=C80+5', near(r7.tiers[2].price, r7.tiers[2].Cq + 5));
+ok('目标价=Cq+10', near(r7.tiers[2].price, r7.tiers[2].Cq + 10));
 ok('各情景利润=等效价−全成本', r7.tiers[2].perScenarioProfit.every(p => near(p.profit, r7.tiers[2].price - r7.scenarios.find(s => s.id === p.id).Ctotal)));
 ok('亏损概率与最差利润已计算', isFinite(r7.tiers[2].lossProb) && isFinite(r7.tiers[2].worstProfit));
 ok('默认假设路径（r0=0.9）', r7.procurement.isDefault === true && near(r7.procurement.coverage, 0.9));

@@ -151,7 +151,13 @@
       if (r3 < CONFIG.LINK_SPOT_MIN_RATIO - 1e-9) errors.push('联动现货（方式③）占比 ' + pct(r3) + ' 低于下限 8%（2026 新规）');
       if (r3 > CONFIG.LINK_SPOT_MAX_RATIO + 1e-9) errors.push('联动现货（方式③）占比 ' + pct(r3) + ' 超过上限 15%（2026 新规）');
     }
-    modes.forEach(m => { if (!((Number(m.flatPrice) || 0) > 0)) errors.push('联动方式' + m.type + ' 平段联动价未填写'); });
+    modes.forEach(m => {
+      if (!((Number(m.flatPrice) || 0) > 0)) {
+        errors.push(m.type === 3
+          ? '现货联动（③）价格自动计算失败（无日前价格数据）'
+          : '联动方式' + m.type + '（月度竞价价）须手填——月度交易综合价为中长期竞价结果，不可用日前价近似');
+      }
+    });
 
     // —— 校验：煤电 / 浮动 ——
     const coal = input.coal || {};

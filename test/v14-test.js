@@ -117,14 +117,14 @@ const rr = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: mi
 ok('Clt=334.8', near(rr.scenarios[0].Clt, 334.8));
 ok('Cda=37.2', near(rr.scenarios[0].Cda, 37.2));
 ok('C总=372', near(rr.scenarios[0].Ctotal, 372));
-ok('冲单价=(C80+5)/K=377', near(rr.tiers[2].price, 377));
+ok('目标价=(C+10)/K=382', near(rr.tiers[2].price, 382));
 ok('procurement 标注默认假设', rr.procurement.isDefault === true && Math.abs(rr.procurement.coverage - 0.9) < 0.02);   // 窗口化后 coverage=窗口内精确值（≈r0）
 
 // 用全年年分月曲线 1200MWh@300 → Clt=1200×300/8760=41.0959；Cda=7560/8760×372=321.041
 const rr2 = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1.2, params: { ...miniP, wholesaleCurves: [cA1] } });
 ok('曲线模式 Clt=41.0959', near(rr2.scenarios[0].Clt, 1200 * 300 / 8760, 1e-3));
 ok('曲线模式 Cda=321.041', near(rr2.scenarios[0].Cda, 7560 / 8760 * 372, 1e-3));
-ok('K=1.2 → P平=(C+5)/1.2', near(rr2.tiers[2].Pping, (rr2.scenarios[0].Ctotal + 5) / 1.2));
+ok('K=1.2 → P平=(C+10)/1.2（目标价）', near(rr2.tiers[2].Pping, (rr2.scenarios[0].Ctotal + 10) / 1.2));
 ok('覆盖率自动汇总=1200/8760', near(rr2.procurement.coverage, 1200 / 8760));
 
 console.log('\n========================================');

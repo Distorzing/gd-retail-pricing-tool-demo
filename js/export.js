@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const U = () => root.Calc.unit;
+  const U = () => (typeof root !== 'undefined' && root.Calc && root.Calc.unit) ? root.Calc.unit : (typeof require !== 'undefined' ? require('./calc.js').unit : null);
 
   function downloadJSON(obj, filename) {
     const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json;charset=utf-8' });
@@ -263,4 +263,5 @@
   }
 
   root.Exporter = { downloadJSON, buildReportHTML, openPrintableReport, buildSnapshot };
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { Exporter: root.Exporter }; }
 })(typeof self !== 'undefined' ? self : this);
