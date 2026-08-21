@@ -115,16 +115,24 @@
   }
 
   function loadVersion(versionId) {
-    // 即改即用恢复的工作参数：init 已把 state.params 设为工作值 → 保留不覆盖（手动切换版本时清除标记后覆盖）
-    const keepWork = state.params && state.workParamsActive;
+    // 工作参数激活时：只有版本号相同才保留；切换版本 → 覆盖并清标记
     const list = versions();
-    const v = keepWork ? state.params : (list.find(x => x.meta.versionId === versionId) || list[0] || BUILTIN_PARAMS);
+    const target = list.find(x => x.meta.versionId === versionId) || list[0] || BUILTIN_PARAMS;
+    const keepWork = state.params && state.workParamsActive && state.activeVersionId === versionId;
     if (!keepWork) {
-      if (!v) return;   // 防御：无可用参数版本
-      state.params = deepCopy(v); state.workParamsActive = false;
+      if (!target) return;
+      state.params = deepCopy(target);
+      state.workParamsActive = false;
+      localStorage.removeItem('pt-work-params');   // 切版本 → 清除工作参数缓存
     }
-    state.activeVersionId = v.meta.versionId;
-    $('activeVersionBadge').textContent = '参数版本 ' + v.meta.versionId + (keepWork ? '（工作值）' : '');
+    state.activeVersionId = target.meta.versionId;
+    $('activeVersionBadge').textContent = '参数版本 ' + target.meta.versionId + (keepWork ? '（工作值）' : '');
+    // 切换反馈
+    if (!keepWork) {
+      const hint = $('versionMetaHint');
+      if (hint) { hint.textContent = target.meta.versionId + '｜已切换生效'; hint.style.color = 'var(--green)'; setTimeout(() => { hint.style.color = ''; hint.textContent = target.meta.versionId + '｜创建 ' + (target.meta.createdAt || '—'); }, 2000); }
+    }
+    const v = target;
     $('activeVersionBadge').title = v.meta.versionName + '（生效 ' + (v.meta.effectiveDate || '—') + '）';
     const wSumV = v.scenarios.reduce((a, s) => a + Number(s.weight || 0), 0);
     $('sbVersion').innerHTML = '<b>' + esc(v.meta.versionId) + (v.meta.versionId === BUILTIN_PARAMS.meta.versionId ? '（内置）' : '') + '</b><br>' +
