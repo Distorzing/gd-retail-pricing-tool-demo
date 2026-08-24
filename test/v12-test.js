@@ -117,7 +117,8 @@ const q8760 = keys.map(k => {
   const shape = (h >= 8 && h <= 11) || (h >= 14 && h <= 17) ? 2.2 : (h >= 19 && h <= 21 ? 1.5 : (h < 6 ? 0.4 : 1.0));
   return 2 * wd * shape;
 });
-const r8 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1.08, params: PARAMS });
+const p8 = JSON.parse(JSON.stringify(PARAMS)); p8.wholesaleCurves = [];   // 测默认假设需清空内置采购曲线
+const r8 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1.08, params: p8 });
 ok('三档产出且为正', r8.tiers.every(t => isFinite(t.Pping) && t.Pping > 0));
 ok('两部制成本拆分齐全（Clt/Cda）', r8.scenarios.every(s => isFinite(s.Clt) && isFinite(s.Cda)));
 ok('含 VaR/CVaR/亏损概率', r8.tiers.every(t => isFinite(t.VaR) && isFinite(t.CVaR) && isFinite(t.lossProb)));

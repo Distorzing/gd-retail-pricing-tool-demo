@@ -128,7 +128,8 @@ const q8760 = keys.map(k => {
   const shape = (h >= 8 && h <= 11) || (h >= 14 && h <= 17) ? 2.2 : (h >= 19 && h <= 21 ? 1.5 : (h < 6 ? 0.4 : 1.0));
   return 2 * wd * shape;
 });
-const r7 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1, params: PARAMS });
+const p7 = JSON.parse(JSON.stringify(PARAMS)); p7.wholesaleCurves = [];   // 测默认假设路径需清空内置采购曲线
+const r7 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1, params: p7 });
 ok('全量计算产出三档价', r7.tiers.length === 3 && r7.tiers.every(t => isFinite(t.price) && t.price > 0));
 ok('每档含 Cq/M/P平 与 VaR/CVaR', r7.tiers.every(t => isFinite(t.Cq) && isFinite(t.M) && isFinite(t.Pping) && isFinite(t.VaR) && isFinite(t.CVaR)));
 ok('目标价=Cq+10', near(r7.tiers[2].price, r7.tiers[2].Cq + 10));
@@ -138,7 +139,7 @@ ok('默认假设路径（r0=0.9）', r7.procurement.isDefault === true && near(r
 console.log('      [参考] 三档等效价 元/MWh：保守=' + r7.tiers[0].price.toFixed(2) +
   ' 目标=' + r7.tiers[1].price.toFixed(2) + ' 冲单=' + r7.tiers[2].price.toFixed(2) +
   '；E[C]=' + r7.EC.toFixed(2) + '；覆盖率=' + (r7.procurement.coverage * 100).toFixed(0) + '%（默认假设）');
-const r7c = Calc.computeQuote({ q: q8760, keys, W: 400, wLt: 390, K: 1, params: PARAMS });
+const r7c = Calc.computeQuote({ q: q8760, keys, W: 400, wLt: 390, K: 1, params: p7 });
 ok('修改 W/W_LT 结果同步变化', !near(r7c.tiers[2].price, r7.tiers[2].price));
 
 console.log('\n========================================');
