@@ -409,7 +409,10 @@
       impact = '将新增覆盖 ' + addH + ' 小时；替换 ' + repH + ' 小时 / ' + repM.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + ' MWh' +
         (keepH ? '；' + keepH + ' 小时因更细粒度曲线而保留不变' : '') + '。确认保存？';
     } else impact = '尚未校验客户曲线，跳过覆盖影响预估。确认保存？';
-    if (!confirm(impact)) return;
+    // 只改元数据（名称/状态等，entries 未变）→ 跳过覆盖确认，直接保存
+    const existing = curves().find(x => x.id === c.id);
+    const entriesUnchanged = existing && JSON.stringify(existing.entries) === JSON.stringify(c.entries);
+    if (!entriesUnchanged && !confirm(impact)) return;
 
     c.updatedAt = Store.now();
     const list = curves();
