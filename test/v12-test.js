@@ -92,8 +92,8 @@ const r6 = Calc.computeQuote({ q: [1, 2, 3, 4], keys: K4, W: 250, wLt: 240, K: 1
 ok('预期毛利为负 → margin 门槛拒绝', r6.tiers[2].gates.margin === false && r6.tiers[2].gates.all === false);
 
 /* ---------- 6. 内置参数完整性 ---------- */
-console.log('\n[6] 内置参数 sys-v2026.7');
-ok('版本号', PARAMS.meta.versionId === 'sys-v2026.7');
+console.log('\n[6] 内置参数 sys-v2026.8');
+ok('版本号', PARAMS.meta.versionId === 'sys-v2026.8');
 ok('三档含 q+M（无旧 bufferQ/bufferE）', PARAMS.tiers.every(t => t.M != null && t.bufferQ == null));
 ok('含批发曲线数组（默认空）', Array.isArray(PARAMS.wholesaleCurves));
 ok('到户层为预测度电分摊单项（12 月值）', PARAMS.billLayer.mode === 'monthly_allocation' && PARAMS.billLayer.item.monthly.length === 12);
@@ -117,7 +117,8 @@ const q8760 = keys.map(k => {
   const shape = (h >= 8 && h <= 11) || (h >= 14 && h <= 17) ? 2.2 : (h >= 19 && h <= 21 ? 1.5 : (h < 6 ? 0.4 : 1.0));
   return 2 * wd * shape;
 });
-const r8 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1.08, params: PARAMS });
+const p8 = JSON.parse(JSON.stringify(PARAMS)); p8.wholesaleCurves = [];
+const r8 = Calc.computeQuote({ q: q8760, keys, W: 372, wLt: 372, K: 1.08, params: p8 });
 ok('三档产出且为正', r8.tiers.every(t => isFinite(t.Pping) && t.Pping > 0));
 ok('两部制成本拆分齐全（Clt/Cda）', r8.scenarios.every(s => isFinite(s.Clt) && isFinite(s.Cda)));
 ok('含 VaR/CVaR/亏损概率', r8.tiers.every(t => isFinite(t.VaR) && isFinite(t.CVaR) && isFinite(t.lossProb)));

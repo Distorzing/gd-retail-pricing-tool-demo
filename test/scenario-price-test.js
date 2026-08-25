@@ -76,6 +76,7 @@ const gNorm = Calc.normalize(PARAMS.baseline.curve);
 const priceCurve = keys.map((k, t) => 400 + Math.sin(t / 100) * 50);
 const mkParams = mode => ({
   ...PARAMS,
+  wholesaleCurves: [],
   scenarios: [{ id: 'T', name: '测试情景', weight: 1, priceMode: mode, priceFactor: 1, allocShare: 0, refundShare: 0, sr: 0, o: 0, curve: priceCurve }]
 });
 // direct：Cda = Σ gap×curve/Q（缺口加权，曲线 g 均价 ~400）；标定：Cda = Σ gap×cal/Q（cal g 均价 = W=500）
