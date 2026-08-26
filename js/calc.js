@@ -284,16 +284,7 @@
       ratio: (params.defaults && params.defaults.coverageRatio != null) ? params.defaults.coverageRatio : 0.9,
       price: wLt
     });
-    // W 均价锚定（V3.1）：只缩放采购价格，采购量保持曲线原量（W 是价格假设，不是加仓）
-    if (!proc0.isDefault && proc0.totalPurchase > 0) {
-      const wavg = proc0.totalCost / proc0.totalPurchase;
-      if (wavg > 1e-9 && Math.abs(wavg - W) / W > 1e-9) {
-        const scaleP = W / wavg;
-        const priceS = proc0.price.map(p => p != null ? p * scaleP : null);
-        // 量不变、价缩放、缺口/超覆盖按原量重算（量不随 W 变）
-        proc0 = { ...proc0, price: priceS, totalCost: proc0.totalPurchase * W, weightedPrice: W };
-      }
-    }
+    // （V4）W 不再缩放采购价格：曲线价格按原值，W 仅作展示与快照
     // 默认假设 + 非全年窗口：采购改为窗口内 g 归一化分布（窗口外不留采购）
     let proc = proc0;
     const isFullWin = win.from === '01-01' && win.to === '12-31';
@@ -347,18 +338,12 @@
       // priceMode='direct'：8760 价格值原样使用（实际/预测日前价格，不标定）；
       // 否则按「形状 × W_da」标定（比例估算，旧 v1/v2/v3 口径）
       const direct = s.priceMode === 'direct';
-      // W 语义（V3）：日前价格的年度锚点——direct 模式下整条曲线按 W/曲线加权均值缩放
-      // （用户输入 W 即表达"我认为日前价格整体应该是这个均价"；缩放保持曲线形状，只调水平）
-      let cal;
-      if (direct) {
-        const curveAvg = s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0);   // 统调加权均价
-        const scale = curveAvg > 1e-9 ? W / curveAvg : 1;
-        cal = { curve: s.curve.map(v => v * scale), k: scale };
-      } else {
-        cal = calibratePriceCurve(gNorm, s.curve, W * Number(s.priceFactor == null ? 1 : s.priceFactor));
-      }
+      // （V4）取消 W 锚定：direct 日前价格按导入原值，不缩放
+      const cal = direct
+        ? { curve: s.curve, k: 1 }
+        : calibratePriceCurve(gNorm, s.curve, W * Number(s.priceFactor == null ? 1 : s.priceFactor));
       const Wda = direct
-        ? W   // direct 缩放后加权均价 = W（按定义）
+        ? s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0)   // 展示：导入曲线加权均价
         : W * Number(s.priceFactor == null ? 1 : s.priceFactor);
       let Cda = 0, CVda = 0, Gcurve = 0, oversellLoss = 0;
       for (let t = 0; t < q.length; t++) {

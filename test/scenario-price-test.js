@@ -82,13 +82,13 @@ const mkParams = mode => ({
 // direct：Cda = Σ gap×curve/Q（缺口加权，曲线 g 均价 ~400）；标定：Cda = Σ gap×cal/Q（cal g 均价 = W=500）
 const rD = Calc.computeQuote({ q: qUni, keys, W: 500, wLt: 380, K: 1, params: mkParams('direct') });
 const cdaD = rD.scenarios[0].Cda;
-ok('direct 模式 calibK=W/曲线均价（缩放）', near(rD.scenarios[0].calibK, 500 / (400), 0.01), rD.scenarios[0].calibK.toFixed(4));   // 曲线均价≈400（正弦），W=500 → k≈1.25
-ok('direct 模式 W_da=W（缩放后均价=锚点）', near(rD.scenarios[0].W_da, 500, 0.5), rD.scenarios[0].W_da.toFixed(2));
+ok('direct 模式 calibK=1（V4 不缩放）', rD.scenarios[0].calibK === 1);
+ok('direct 模式 W_da=曲线加权均价（≠W）', Math.abs(rD.scenarios[0].W_da - 500) > 1);
 const rC = Calc.computeQuote({ q: qUni, keys, W: 500, wLt: 380, K: 1, params: mkParams(undefined) });
 // 缺口相同 → Cda 比例 = 两曲线 g 加权均价之比 ≈ 400/500
 const ratio = cdaD / rC.scenarios[0].Cda;
-ok('direct/标定 Cda 比例 = 1（同锚 W，仅形状差）', near(ratio, 1, 0.02), ratio.toFixed(4));
-ok('direct Cda ≈ 标定 Cda（同锚）', near(cdaD, rC.scenarios[0].Cda, 1), cdaD.toFixed(2) + ' vs ' + rC.scenarios[0].Cda.toFixed(2));
+ok('direct/标定 Cda 比例 ≈ 直接均价/W 均价（≈0.8，V4 原值）', ratio > 0.75 && ratio < 0.85, ratio.toFixed(4));
+ok('direct Cda < 标定 Cda（V4 原值）', cdaD < rC.scenarios[0].Cda);
 
 /* 7. 内置参数已为单情景 direct */
 console.log('\n[7] 内置参数');

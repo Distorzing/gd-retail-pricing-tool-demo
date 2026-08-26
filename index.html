@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=86">
+<link rel="stylesheet" href="css/style.css?v=87">
 </head>
 <body>
 
@@ -63,7 +63,7 @@
           <input type="number" id="inpW" min="0.01" step="0.01" placeholder="手工输入，必须大于 0，如 372" style="width:140px"> 元/MWh
           <span class="hint" id="wSourceHint" style="margin:0"></span>
         </div>
-        <div class="hint">日前价格锚点（直接价格模式下不参与日前成本计算，仅作展示与快照）。选「取批发曲线加权均价」时自动读取批发曲线管理的持仓加权价，手输框禁用。</div>
+        <div class="hint">V4：日前价格与采购价格均按输入/导入原值计算，W 仅作快照记录与展示，不影响测算。选「取批发曲线加权均价」时自动读取持仓加权价。</div>
       </div>
       <div class="form-row">
         <label>客户签约模式 <span class="req">*</span></label>
@@ -296,20 +296,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=86"></script>
-<script src="js/vendor/xlsx.full.min.js?v=86"></script>
-<script src="js/calc.js?v=86"></script>
-<script src="js/policy.js?v=86"></script>
-<script src="js/retail.js?v=86"></script>
-<script src="js/validate.js?v=86"></script>
-<script src="js/xlsx-import.js?v=86"></script>
-<script src="js/store.js?v=86"></script>
-<script src="js/charts.js?v=86"></script>
-<script src="js/export.js?v=86"></script>
-<script src="js/wc-template.js?v=86"></script>
-<script src="js/scenario-price.js?v=86"></script>
-<script src="js/wc-import8760.js?v=86"></script>
-<script src="js/wholesale.js?v=86"></script>
-<script src="js/app.js?v=86"></script>
+<script src="js/data.js?v=87"></script>
+<script src="js/vendor/xlsx.full.min.js?v=87"></script>
+<script src="js/calc.js?v=87"></script>
+<script src="js/policy.js?v=87"></script>
+<script src="js/retail.js?v=87"></script>
+<script src="js/validate.js?v=87"></script>
+<script src="js/xlsx-import.js?v=87"></script>
+<script src="js/store.js?v=87"></script>
+<script src="js/charts.js?v=87"></script>
+<script src="js/export.js?v=87"></script>
+<script src="js/wc-template.js?v=87"></script>
+<script src="js/scenario-price.js?v=87"></script>
+<script src="js/wc-import8760.js?v=87"></script>
+<script src="js/wholesale.js?v=87"></script>
+<script src="js/app.js?v=87"></script>
 </body>
 </html>
