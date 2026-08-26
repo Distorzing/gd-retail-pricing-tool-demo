@@ -280,10 +280,20 @@
     const b = baselineCurve(Q, gNorm);
 
     // 批发曲线汇总（无曲线 → 系统默认基准假设，明确标注）；再按签约窗口裁剪
-    const proc0 = buildProcurement(params.wholesaleCurves || [], qW, keys, gNorm, {
+    let proc0 = buildProcurement(params.wholesaleCurves || [], qW, keys, gNorm, {
       ratio: (params.defaults && params.defaults.coverageRatio != null) ? params.defaults.coverageRatio : 0.9,
       price: wLt
     });
+    // W 均价锚定（V3）：采购曲线价格也整体缩放到 W（与日前价格缩放同锚，口径统一）
+    // 有曲线时：weightedPrice（持仓加权均价）→ W；无曲线（默认假设）价格本来就是 wLt（=W 兜底）
+    if (!proc0.isDefault && proc0.totalPurchase > 0) {
+      const wavg = proc0.totalCost / proc0.totalPurchase;
+      if (wavg > 1e-9 && Math.abs(wavg - W) / W > 1e-9) {
+        const scaleP = W / wavg;
+        const priceS = proc0.price.map(p => p != null ? p * scaleP : null);
+        proc0 = { ...proc0, price: priceS, totalCost: proc0.totalPurchase * W, weightedPrice: W };
+      }
+    }
     // 默认假设 + 非全年窗口：采购改为窗口内 g 归一化分布（窗口外不留采购）
     let proc = proc0;
     const isFullWin = win.from === '01-01' && win.to === '12-31';
