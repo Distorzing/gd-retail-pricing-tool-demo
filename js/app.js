@@ -776,9 +776,9 @@
       const allocVal = (firstScn.CbillAbsorb || 0) + (firstScn.allocShare || 0) - (firstScn.refundShare || 0);
       const feeLine = '<div class="tier-k" style="color:var(--blue)">含：服务费 ' + num(opsVal) + ' + 分摊 ' + num(allocVal) + ' 元/MWh（已计入价格）</div>';
       const priceHtml =
-        '<div class="tier-price">' + num(pPing) + ' <small>元/MWh（固定平段价）</small></div>' +
+        '<div class="tier-price">' + num(equiv) + ' <small>元/MWh（零售等效均价 = ' + num(equiv / 1000, 4) + ' 元/度）</small></div>' +
         '<div class="tier-pvg"><span>峰 <b>' + num(tou.f1 * pPing) + '</b></span><span>平 <b>' + num(pPing) + '</b></span><span>谷 <b>' + num(tou.f2 * pPing) + '</b></span></div>' +
-        '<div class="equiv">零售等效均价 ' + num(equiv) + '（' + num(equiv / 1000, 4) + ' 元/度）· 全成本 ' + num(t.equiv) + '</div>' +
+        '<div class="equiv">合同固定平段价 ' + num(pPing) + ' · 全成本 ' + num(t.equiv) + '</div>' +
         feeLine +
 
         '<div class="tier-k">' + (be.K != null ? 'K=' + num(be.K, 4) + ' · ' : '') + 'f1=' + tou.f1 + ' / f2=' + tou.f2 + alphaTxt +
