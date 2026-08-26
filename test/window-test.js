@@ -54,7 +54,7 @@ const r3w = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: p
 ok('窗口模式：Q1 曲线被剔除 → 采购 0', r3w.procurement.totalPurchase < 1e-6, r3w.procurement.totalPurchase);
 ok('窗口模式 Clt=0（采购在窗口外）', r3w.scenarios[0].Clt < 0.01, r3w.scenarios[0].Clt);
 const r3f = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: p3 });
-ok('年度模式：Q1 曲线生效 → Clt=1000×300/8760（V4 原价）', near(r3f.scenarios[0].Clt, 1000 * 300 / 8760, 0.1), r3f.scenarios[0].Clt);
+ok('年度模式：Q1 曲线@300 按W=372缩放 → Clt=1000×372/8760', near(r3f.scenarios[0].Clt, 1000 * 372 / 8760, 0.1), r3f.scenarios[0].Clt);
 
 /* 4. 窗口内曲线：9 月加一条 200MWh@420 → 窗口模式 Clt=200×420/2928=28.69 */
 console.log('\n[3] 窗口内新增曲线（420）');
@@ -63,7 +63,7 @@ p4.wholesaleCurves = [{ id: 'c9', name: '9月增量', status: 'locked', enabled:
   window: { from: '09-01', to: '09-30' }, granularity: 'year_month', quantityMode: 'mwh', priceMode: 'flat', flatPrice: 420,
   entries: [{ timeKey: '09', quantityMwh: 200, ratioPct: null, priceYuanPerMwh: 420 }] }];
 const r4w = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: p4, window: { from: '09-01', to: '12-31' } });
-ok('窗口模式：9月 420 曲线按原价420 → Clt=200×420/2928（V4）', near(r4w.scenarios[0].Clt, 200 * 420 / 2928, 0.1), r4w.scenarios[0].Clt.toFixed(2));
+ok('窗口模式：9月曲线@420 按W=372缩放 → Clt=200×372/2928', near(r4w.scenarios[0].Clt, 200 * 372 / 2928, 0.1), r4w.scenarios[0].Clt.toFixed(2));
 
 /* 5. 分摊窗口化：absorb + 9-12 月每月 9.7，1-8 月 100（应不影响窗口年化） */
 console.log('\n[4] 分摊窗口年化');

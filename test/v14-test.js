@@ -122,7 +122,7 @@ ok('procurement 标注默认假设', rr.procurement.isDefault === true && Math.a
 
 // 用全年年分月曲线 1200MWh@300 → Clt=1200×300/8760=41.0959；Cda=7560/8760×372=321.041
 const rr2 = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1.2, params: { ...miniP, wholesaleCurves: [cA1] } });
-ok('曲线模式 Clt=1200×300/8760（V4 原价）', near(rr2.scenarios[0].Clt, 1200 * 300 / 8760, 1), rr2.scenarios[0].Clt.toFixed(2));
+ok('曲线模式 Clt=1200×372/8760（按W缩放）', near(rr2.scenarios[0].Clt, 1200 * 372 / 8760, 1), rr2.scenarios[0].Clt.toFixed(2));
 ok('曲线模式 Cda=321.041', near(rr2.scenarios[0].Cda, 7560 / 8760 * 372, 1e-3));
 ok('K=1.2 → P平=(C+10)/1.2（目标价）', near(rr2.tiers[2].Pping, (rr2.scenarios[0].Ctotal + 10) / 1.2));
 ok('覆盖率自动汇总=1200/8760', near(rr2.procurement.coverage, 1200 / 8760));

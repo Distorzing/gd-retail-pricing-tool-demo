@@ -284,7 +284,16 @@
       ratio: (params.defaults && params.defaults.coverageRatio != null) ? params.defaults.coverageRatio : 0.9,
       price: wLt
     });
-    // （V4）W 不再缩放采购价格：曲线价格按原值，W 仅作展示与快照
+    // W 锚定中长期采购价格（V5）：曲线价格整体缩放到 W（日前价格不联动，按导入原值）
+    if (!proc0.isDefault && proc0.totalPurchase > 0) {
+      const wavg = proc0.totalCost / proc0.totalPurchase;
+      if (wavg > 1e-9 && Math.abs(wavg - W) / W > 1e-9) {
+        const scaleP = W / wavg;
+        const priceS = proc0.price.map(p => p != null ? p * scaleP : null);
+        // 量不变、价缩放（W 是价格假设，不是加仓）
+        proc0 = { ...proc0, price: priceS, totalCost: proc0.totalPurchase * W, weightedPrice: W };
+      }
+    }
     // 默认假设 + 非全年窗口：采购改为窗口内 g 归一化分布（窗口外不留采购）
     let proc = proc0;
     const isFullWin = win.from === '01-01' && win.to === '12-31';
