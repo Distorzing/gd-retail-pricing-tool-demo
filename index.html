@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东单客户固定价零售定价工具 V1.4</title>
-<link rel="stylesheet" href="css/style.css?v=80">
+<link rel="stylesheet" href="css/style.css?v=81">
 </head>
 <body>
 
@@ -54,9 +54,16 @@
         <div class="hint" id="versionMetaHint"></div>
       </div>
       <div class="form-row">
-        <label>年度批发均价 W <span class="req">*</span>（元/MWh，日前价格锚点）</label>
-        <input type="number" id="inpW" min="0.01" step="0.01" placeholder="手工输入，必须大于 0，如 372">
-        <div class="hint">日前统一结算点价格的年度锚点，保存入本次报价快照</div>
+        <label>年度批发均价 W <span class="req">*</span></label>
+        <div class="inline" style="gap:10px;flex-wrap:wrap">
+          <select id="wSource" style="width:auto">
+            <option value="manual" selected>手输年度均价</option>
+            <option value="curve">取批发曲线加权均价</option>
+          </select>
+          <input type="number" id="inpW" min="0.01" step="0.01" placeholder="手工输入，必须大于 0，如 372" style="width:140px"> 元/MWh
+          <span class="hint" id="wSourceHint" style="margin:0"></span>
+        </div>
+        <div class="hint">日前价格锚点（直接价格模式下不参与日前成本计算，仅作展示与快照）。选「取批发曲线加权均价」时自动读取批发曲线管理的持仓加权价，手输框禁用。</div>
       </div>
       <div class="form-row">
         <label>客户签约模式 <span class="req">*</span></label>
@@ -289,20 +296,20 @@
 <div class="wc-overlay hidden" id="wcOverlay"></div>
 <aside class="wc-drawer hidden" id="wcDrawer" aria-label="批发曲线管理"></aside>
 
-<script src="js/data.js?v=80"></script>
-<script src="js/vendor/xlsx.full.min.js?v=80"></script>
-<script src="js/calc.js?v=80"></script>
-<script src="js/policy.js?v=80"></script>
-<script src="js/retail.js?v=80"></script>
-<script src="js/validate.js?v=80"></script>
-<script src="js/xlsx-import.js?v=80"></script>
-<script src="js/store.js?v=80"></script>
-<script src="js/charts.js?v=80"></script>
-<script src="js/export.js?v=80"></script>
-<script src="js/wc-template.js?v=80"></script>
-<script src="js/scenario-price.js?v=80"></script>
-<script src="js/wc-import8760.js?v=80"></script>
-<script src="js/wholesale.js?v=80"></script>
-<script src="js/app.js?v=80"></script>
+<script src="js/data.js?v=81"></script>
+<script src="js/vendor/xlsx.full.min.js?v=81"></script>
+<script src="js/calc.js?v=81"></script>
+<script src="js/policy.js?v=81"></script>
+<script src="js/retail.js?v=81"></script>
+<script src="js/validate.js?v=81"></script>
+<script src="js/xlsx-import.js?v=81"></script>
+<script src="js/store.js?v=81"></script>
+<script src="js/charts.js?v=81"></script>
+<script src="js/export.js?v=81"></script>
+<script src="js/wc-template.js?v=81"></script>
+<script src="js/scenario-price.js?v=81"></script>
+<script src="js/wc-import8760.js?v=81"></script>
+<script src="js/wholesale.js?v=81"></script>
+<script src="js/app.js?v=81"></script>
 </body>
 </html>

@@ -266,6 +266,23 @@
       invalidateResult();
     });
     $('inpW').addEventListener('input', updateComputeEnabled);
+    $('wSource').addEventListener('change', () => {
+      const curve = $('wSource').value === 'curve';
+      $('inpW').disabled = curve;
+      if (curve) {
+        const curves = (state.params.wholesaleCurves || []).filter(c => c.enabled !== false);
+        let cost = 0, qty = 0;
+        curves.forEach(c => (c.entries || []).forEach(e => {
+          const qe = c.quantityMode === 'ratio' ? 0 : Number(e.quantityMwh) || 0;
+          const pe = Number(e.priceYuanPerMwh != null ? e.priceYuanPerMwh : c.flatPrice) || 0;
+          cost += qe * pe; qty += qe;
+        }));
+        const hint = $('wSourceHint');
+        hint.textContent = qty > 0 ? '曲线加权均价 = ' + (cost / qty).toFixed(2) + ' 元/MWh（' + curves.length + ' 条曲线）' : '曲线无绝对电量，不可用';
+        hint.style.color = qty > 0 ? 'var(--green)' : 'var(--red)';
+      } else { $('wSourceHint').textContent = ''; }
+      updateComputeEnabled(); invalidateResult();
+    });
   }
 
   /** 零售侧输入联动：方式互斥/行渲染/开关启停/占比合计/峰平谷聚合提示 */
@@ -492,6 +509,20 @@
       state.validation = { ok: true, series: { keys }, stats: { count: 8760 } };
     }
     if (!state.qRaw) return;
+    // W 来源：curve=批发曲线加权均价（电量加权）；manual=手输
+    if (inp.wSource === 'curve') {
+      const curves = (state.params.wholesaleCurves || []).filter(c => c.enabled !== false);
+      if (!curves.length) { alert('当前无启用中的批发曲线，「取批发曲线加权均价」不可用；请改手输或到批发曲线管理添加曲线'); return; }
+      let cost = 0, qty = 0;
+      curves.forEach(c => (c.entries || []).forEach(e => {
+        const qe = c.quantityMode === 'ratio' ? 0 : Number(e.quantityMwh) || 0;
+        const pe = Number(e.priceYuanPerMwh != null ? e.priceYuanPerMwh : c.flatPrice) || 0;
+        cost += qe * pe; qty += qe;
+      }));
+      if (!(qty > 0)) { alert('批发曲线无绝对电量（MWh），无法算加权均价；请改手输'); return; }
+      inp.W = Math.round(cost / qty * 100) / 100;
+      $('inpW').value = inp.W;
+    }
     const needW = inp.signMode !== 'midyear';
     if (needW && !(inp.W > 0)) { alert('年度批发均价 W 必须大于 0'); return; }
     if (!needW && !(inp.midYearPrice > 0)) { alert('年内新增：请填后续中长期均价'); return; }
