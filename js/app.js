@@ -487,7 +487,15 @@
     const inp = readInputs();
     const simple = inp.inputMode === 'simple';
     const needW = inp.signMode !== 'midyear';   // 年度用户必填 W；年内新增用后续中长期均价
-    const ready = !!((needW ? inp.W > 0 : inp.midYearPrice > 0) && (simple ? true : (state.validation && state.validation.ok)));
+    let wOk;
+    if (!needW) wOk = inp.midYearPrice > 0;                       // 年内新增：后续均价
+    else if (inp.wSource === 'curve') {                            // 曲线加权均价：检查曲线有绝对电量
+      const curves = (state.params.wholesaleCurves || []).filter(c => c.enabled !== false);
+      let qty = 0;
+      curves.forEach(c => (c.entries || []).forEach(e => { if (c.quantityMode !== 'ratio') qty += Number(e.quantityMwh) || 0; }));
+      wOk = qty > 0;
+    } else wOk = inp.W > 0;                                       // 手输
+    const ready = !!(wOk && (simple ? true : (state.validation && state.validation.ok)));
     $('btnCompute').disabled = !ready;
   }
 
