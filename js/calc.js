@@ -337,11 +337,18 @@
       // priceMode='direct'：8760 价格值原样使用（实际/预测日前价格，不标定）；
       // 否则按「形状 × W_da」标定（比例估算，旧 v1/v2/v3 口径）
       const direct = s.priceMode === 'direct';
-      const cal = direct
-        ? { curve: s.curve, k: 1 }
-        : calibratePriceCurve(gNorm, s.curve, W * Number(s.priceFactor == null ? 1 : s.priceFactor));
+      // W 语义（V3）：日前价格的年度锚点——direct 模式下整条曲线按 W/曲线加权均值缩放
+      // （用户输入 W 即表达"我认为日前价格整体应该是这个均价"；缩放保持曲线形状，只调水平）
+      let cal;
+      if (direct) {
+        const curveAvg = s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0);   // 统调加权均价
+        const scale = curveAvg > 1e-9 ? W / curveAvg : 1;
+        cal = { curve: s.curve.map(v => v * scale), k: scale };
+      } else {
+        cal = calibratePriceCurve(gNorm, s.curve, W * Number(s.priceFactor == null ? 1 : s.priceFactor));
+      }
       const Wda = direct
-        ? s.curve.reduce((a, v, t) => a + gNorm[t] * v, 0)   // 展示：直接曲线的统调加权均价
+        ? W   // direct 缩放后加权均价 = W（按定义）
         : W * Number(s.priceFactor == null ? 1 : s.priceFactor);
       let Cda = 0, CVda = 0, Gcurve = 0, oversellLoss = 0;
       for (let t = 0; t < q.length; t++) {
