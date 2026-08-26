@@ -284,13 +284,13 @@
       ratio: (params.defaults && params.defaults.coverageRatio != null) ? params.defaults.coverageRatio : 0.9,
       price: wLt
     });
-    // W 均价锚定（V3）：采购曲线价格也整体缩放到 W（与日前价格缩放同锚，口径统一）
-    // 有曲线时：weightedPrice（持仓加权均价）→ W；无曲线（默认假设）价格本来就是 wLt（=W 兜底）
+    // W 均价锚定（V3.1）：只缩放采购价格，采购量保持曲线原量（W 是价格假设，不是加仓）
     if (!proc0.isDefault && proc0.totalPurchase > 0) {
       const wavg = proc0.totalCost / proc0.totalPurchase;
       if (wavg > 1e-9 && Math.abs(wavg - W) / W > 1e-9) {
         const scaleP = W / wavg;
         const priceS = proc0.price.map(p => p != null ? p * scaleP : null);
+        // 量不变、价缩放、缺口/超覆盖按原量重算（量不随 W 变）
         proc0 = { ...proc0, price: priceS, totalCost: proc0.totalPurchase * W, weightedPrice: W };
       }
     }
