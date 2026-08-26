@@ -37,10 +37,10 @@ p2.wholesaleCurves = [];
 p2.defaults.coverageRatio = 0;
 p2.costModel.reservePerMwh = 0; p2.costModel.opsPerMwh = 0;
 p2.billLayer = { mode: 'monthly_allocation', item: { bearer: 'pass', monthly: new Array(12).fill(0) } };
-const gN = Calc.normalize(PARAMS.baseline.curve);
-const curveAvg = PARAMS.scenarios[0].curve.reduce((a, v, t) => a + gN[t] * v, 0);   // gNorm 加权均价（引擎缩放基准）
+const gN2 = Calc.normalize(p2.baseline.curve);   // p2 用均匀 baseline
+const curveAvg = PARAMS.scenarios[0].curve.reduce((a, v, t) => a + gN2[t] * v, 0);   // 引擎缩放基准（p2 的 gNorm 加权）
 const r2 = Calc.computeQuote({ q: qUni, keys, W: curveAvg, wLt: 372, K: 1, params: p2 });   // W=加权均价 → 无缩放
-const daWavg = curveAvg;   // W=加权均价 → 缩放 1:1 → 全缺口 Cda=曲线加权均价（gNorm 口径）
+const daWavg = PARAMS.scenarios[0].curve.reduce((a, b) => a + b, 0) / N;   // 均匀缺口 → 简单均价（缩放 1:1 时）
 ok('Cda ≈ 日前均价（全缺口）', near(r2.scenarios[0].Cda, daWavg, 1), r2.scenarios[0].Cda.toFixed(2) + ' vs ' + daWavg.toFixed(2));
 
 /* 3. 缺口为 0（持仓=负荷）：Cda=0，成本=持仓价 */
