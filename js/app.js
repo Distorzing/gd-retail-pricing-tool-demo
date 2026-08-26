@@ -349,6 +349,7 @@
     return {
       customerName: $('inpCustomer').value.trim(),
       W: Number($('inpW').value),
+      wSource: $('wSource') ? $('wSource').value : 'manual',
       wLt: 0,   // W_LT 输入已删：留空口径=取 W
       unit: 'MWh', unitConfirmed: true,
       inputMode: (document.querySelector('input[name=inputMode]:checked') || {}).value || 'curve',
