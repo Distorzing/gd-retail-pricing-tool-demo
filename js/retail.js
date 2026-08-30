@@ -94,6 +94,7 @@
         planMode: 'fair', usage: { peak: Qp, flat: Qf, valley: Qv, total: Qt }, tou, k,
         energy: { fixed: { seg: { peak: 0, flat: 0, valley: 0 }, total: 0 }, linked: { seg: { peak: 0, flat: 0, valley: 0 }, total: 0 }, total: grand },
         peakValley: { valleySubsidy: 0, peakPenalty: 0, net: 0 },
+        bill: { linkRatio: 0, total: 0 },   // 平价套餐无联动部分 → 分摊不进电能量价
         green: { total: 0 },
         grandTotal: grand, unitPrice: grand / Qt, unitPriceYuanPerKwh: grand / Qt / 1000,
         riskGuard: guard, errors: [], formulas: F,
@@ -221,7 +222,19 @@
 
     const energyTotal = fixedTotal + linkTotal + coalTotal + floatFeeTotal;
 
-    // ============ ② 峰谷平衡 ============
+    // ============ 分摊·联动部分（2026-08-30 口径变更）============
+    // 分摊只算进可联动部分（联动电量 × 月度分摊，随联动价格向用户收取，代收代付），
+    // 不直接加到固定平段价上；成本侧 CbillAbsorb 同口径（联动占比 × 年化分摊），两者轧平
+    let billFeeTotal = 0;
+    if (input.billLayer && Array.isArray(input.billLayer.monthly) && linkRatioSum > 0) {
+      for (let mI = 0; mI < 12; mI++) {
+        billFeeTotal += (Number(mu[mI]) || 0) * linkRatioSum * (Number(input.billLayer.monthly[mI]) || 0);
+      }
+      F.push({ comp: '分摊·联动部分', seg: '合计',
+        formula: 'Σ 各月[电量 × ' + pct(linkRatioSum) + ' × 月分摊] = ' + yuan(billFeeTotal) + ' 元（代收代付，不进固定平段价）' });
+    }
+
+    // ============ ② 峰谷平衡（基准 = 2026 年度双边协商成交均价 372.14 元/MWh）============
     const valleySubsidy = Qv * CONFIG.PV_REF_PRICE * (1 - tou.f2);
     const peakPenalty = Qp * CONFIG.PV_REF_PRICE * (tou.f1 - 1);
     const pvNet = valleySubsidy - peakPenalty;
@@ -229,13 +242,14 @@
     F.push({ comp: '峰谷平衡·峰段惩罚', seg: '峰', formula: Qp + ' MWh × ' + CONFIG.PV_REF_PRICE + ' × (' + tou.f1 + ' − 1) = ' + yuan(peakPenalty) + ' 元' });
 
     // 绿电环境价值：已完全删除（2026-08-21）
-    const grandTotal = energyTotal + pvNet;   // 绿电已删除
+    const grandTotal = energyTotal + pvNet + billFeeTotal;   // 绿电已删除
     return {
       usage: { peak: Qp, flat: Qf, valley: Qv, total: Qt },
       tou, k,
       energy: { fixed: { seg: fixedFee, total: fixedTotal }, linked: { seg: linkFee, total: linkTotal },
         coal: coalFee ? { seg: coalFee, total: coalTotal } : null,
         floatFee: ff.enabled ? { total: floatFeeTotal } : null, total: energyTotal },
+      bill: { linkRatio: linkRatioSum, total: billFeeTotal },
       peakValley: { valleySubsidy, peakPenalty, net: pvNet },
       green: { total: 0 }, grandTotal,
       unitPrice: Qt > 0 ? grandTotal / Qt : 0,          // 元/MWh
@@ -278,7 +292,7 @@
   const pct = v => ((Number(v) || 0) * 100).toFixed(2) + '%';
   const yuan = v => (Math.round(v * 100) / 100).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 
-  /** PPT 算例（自检基准 55.70 万） */
+  /** PPT 算例（2026-08-30 起：372.14 基准 → 自检基准 54.0864 万） */
   function demoInput() {
     return {
       userType: '非深圳工业',

@@ -563,6 +563,8 @@
         W: needW ? inp.W : inp.midYearPrice,   // 年内新增：W=后续中长期均价
         wLt,
         K: pvPre.K,
+        billLinkRatio: rtInput.planMode === 'fair' ? 0
+          : (rtInput.link.modes || []).reduce((a, m) => a + (Number(m.ratio) || 0), 0),   // 分摊只算进联动部分
         params: (() => {
           const p = JSON.parse(JSON.stringify(state.params));
           if (signWin.isFull) delete p.costModel.midYearPrice;   // 年度用户不适用
@@ -674,6 +676,12 @@
       link: { modes: linkModes },
       coal: { enabled: $('rtCoalOn').checked, ceciSign: Number($('rtCeciSign').value) || 0, ceciSettle: Number($('rtCeciSettle').value) || 0, floatPrice: Number($('rtCoalPrice').value) || 0 },
       floatFee: { enabled: false, price: 0 },   // 2026 新规：固定+联动模式不签浮动费用
+      // 分摊只算进联动部分：售电公司承担时随联动价格向用户收取（代收代付）；客户承担（pass）不进电能量价
+      billLayer: (() => {
+        const b = state.params.billLayer;
+        return (b && b.item && b.item.bearer !== 'pass' && Array.isArray(b.item.monthly))
+          ? { monthly: b.item.monthly.map(Number) } : null;
+      })(),
       green: { enabled: false,   // 固定+联动模式删除绿电环境价值输入
         volumeMode: 'ratio',
         volumeMode: 'ratio',
@@ -774,7 +782,7 @@
       const firstScn = r.scenarios[0] || {};
       const opsVal = firstScn.Ccredit || 0;
       const allocVal = (firstScn.CbillAbsorb || 0) + (firstScn.allocShare || 0) - (firstScn.refundShare || 0);
-      const feeLine = '<div class="tier-k" style="color:var(--blue)">含：服务费 ' + num(opsVal) + ' + 分摊 ' + num(allocVal) + ' 元/MWh（已计入价格）</div>';
+      const feeLine = '<div class="tier-k" style="color:var(--blue)">含：服务费 ' + num(opsVal) + ' + 分摊 ' + num(allocVal) + ' 元/MWh（已计入等效价；其中度电分摊仅联动部分、随联动价代收，不进固定平段价）</div>';
       const priceHtml =
         '<div class="tier-price">' + num(equiv) + ' <small>元/MWh（零售等效均价 = ' + num(equiv / 1000, 4) + ' 元/度）</small></div>' +
         '<div class="tier-pvg"><span>峰 <b>' + num(tou.f1 * pPing) + '</b></span><span>平 <b>' + num(pPing) + '</b></span><span>谷 <b>' + num(tou.f2 * pPing) + '</b></span></div>' +
@@ -883,7 +891,7 @@
 
     let head = '<tr><th>情景</th><th class="num">权重</th><th class="num">W_da</th><th class="num">标定<br>系数k</th>' +
       '<th class="num">中长期<br>Clt</th><th class="num">日前缺口<br>Cda</th><th class="num">曲线价值<br>（绝对差价收益）*</th>' +
-      '<th class="num">服务费</th><th class="num">度电<br>分摊</th><th class="num">C总</th>' +
+      '<th class="num">服务费</th><th class="num">度电分摊<br>(联动部分)</th><th class="num">C总</th>' +
       r.tiers.map(t => '<th class="num">' + esc(t.name) + '<br>利润</th>').join('') + '</tr>';
     let body = r.scenarios.map(s => {
       const cells = r.tiers.map(t => {
@@ -901,7 +909,7 @@
       '<td class="num"><b>' + num(wAvg(s => s.Clt)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.Cda)) + '</b></td><td class="num ' + clsSigned(wAvg(s => s.Gcurve)) + '"><b>' + sgn(wAvg(s => s.Gcurve)) + '</b></td>' +
       '<td class="num"><b>' + num(wAvg(s => s.Ccredit)) + '</b></td><td class="num"><b>' + num(wAvg(s => s.CbillAbsorb)) + '</b></td><td class="num"><b>' + num(r.EC) + '</b></td>' +
       r.tiers.map(t => '<td class="num ' + clsProfit(t.expectedProfit) + '"><b>' + sgn(t.expectedProfit) + '</b></td>').join('') + '</tr>';
-    body += '<tr><td colspan="13" class="hint" style="text-align:left">* 绝对差价收益 = Σ 持仓电量 × (日前价 − 持仓合约价) / Q（元/MWh）：持仓按合约价锁定 vs 现货市场价的差价（正=锁得便宜、负=锁贵了）。已含于批发成本，仅作解释、不重复计列。</td></tr>';
+    body += '<tr><td colspan="13" class="hint" style="text-align:left">* 绝对差价收益 = Σ 持仓电量 × (日前价 − 持仓合约价) / Q（元/MWh）：持仓按合约价锁定 vs 现货市场价的差价（正=锁得便宜、负=锁贵了）。已含于批发成本，仅作解释、不重复计列。<br>度电分摊（联动部分）= 联动占比 × 年化分摊：只随联动电量代收代付，固定平段价不含分摊（收入侧「分摊·联动部分」同额收取，两者轧平）。</td></tr>';
     $('tblScenarios').innerHTML = head + body;
 
     $('tblQuantiles').innerHTML =
@@ -951,6 +959,7 @@
       ['市场联动电费', r.energy.linked.total, r.energy.linked.seg],
       ['煤电联动电费', r.energy.coal ? r.energy.coal.total : null, r.energy.coal ? r.energy.coal.seg : null],
       ['浮动电费', r.energy.floatFee ? r.energy.floatFee.total : null, null],
+      ['分摊 · 联动部分（代收代付）', r.bill && r.bill.total ? r.bill.total : null, null],
       ['峰谷平衡 · 谷段补贴', r.peakValley.valleySubsidy, null],
       ['峰谷平衡 · 峰段惩罚', -r.peakValley.peakPenalty, null],
     ].filter(x => x[1] != null && Math.abs(x[1]) > 1e-9);
@@ -977,7 +986,8 @@
     card.style.display = '';
     const it = bl.item;
     const { annual, Qm } = Calc.annualizeMonthly(it.monthly, state.qMWh, state.validation.series.keys);
-    const bearerTxt = it.bearer === 'pass' ? '客户承担（代收/转嫁）' : '售电公司承担（不入到户价）';
+    const lr = (state.retail && state.retail.result && state.retail.result.bill) ? (state.retail.result.bill.linkRatio || 0) : 0;
+    const bearerTxt = it.bearer === 'pass' ? '客户承担（代收/转嫁）' : '售电公司承担（只计入联动部分）';
     const billAdd = it.bearer === 'pass' ? annual : 0;
     body.innerHTML =
       '<div class="risk-grid">' +
@@ -991,7 +1001,7 @@
       state.result.tiers.map(t => esc(t.name) + ' ' + num(t.price + billAdd)).join('　｜　') +
       '</b> 元/MWh。<br>' + (it.bearer === 'pass'
         ? '承担方=客户承担（代收/转嫁）：分摊<b>不计入</b>三档价成本，仅在到户参考价中单列；不计入电能量收入。'
-        : '承担方=售电公司承担：分摊<b>已计入</b>三档价全成本（CbillAbsorb=' + num(annual) + ' 元/MWh），到户参考价不再重复计列。') + '</div>';
+        : '承担方=售电公司承担：分摊<b>只计入联动部分</b>——成本 CbillAbsorb = 联动占比 ' + (lr * 100).toFixed(0) + '% × 年化 ' + num(annual) + ' = ' + num(annual * lr) + ' 元/MWh，收入侧「分摊·联动部分」同额向用户收取（代收代付、两者轧平），<b>不直接计入固定平段价</b>；到户参考价不再重复计列。') + '</div>';
   }
 
   const chip = (k, v, cls) => '<div class="schip ' + (cls || '') + '">' + k + '<b>' + v + '</b></div>';
@@ -1339,7 +1349,7 @@
     if (p.billLayer && p.billLayer.item) {
       const it = p.billLayer.item;
       html += '<div class="param-block"><h3>到户账单层：度电分摊（1–12 月逐月值）</h3>' +
-        '<div class="hint" style="margin-bottom:10px">承担方=售电公司承担 → <b>计入三档价全成本</b>；客户承担（代收/转嫁）→ 不计入成本，仅在到户参考价单列。</div>' +
+        '<div class="hint" style="margin-bottom:10px">承担方=售电公司承担 → <b>只计入联动部分</b>（联动占比 × 年化分摊，随联动价格向用户代收代付，不进固定平段价）；客户承担（代收/转嫁）→ 不计入成本与电能量价，仅在到户参考价单列。</div>' +
         '<div class="param-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">' +
         it.monthly.map((v, m) => fld((m + 1) + ' 月（元/MWh）', '<input type="number" id="peBillM' + m + '" step="0.01" value="' + (v || 0) + '">')).join('') +
         fld('承担方', '<select id="peBillBearer"><option value="pass"' + (it.bearer === 'pass' ? ' selected' : '') + '>客户承担（代收/转嫁）</option><option value="absorb"' + (it.bearer === 'absorb' ? ' selected' : '') + '>售电公司承担</option></select>') +

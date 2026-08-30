@@ -74,6 +74,9 @@ const r5 = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: p5
 ok('分摊年化=9.7（只用窗口内月份电量加权）', near(r5.scenarios[0].CbillAbsorb, 9.7, 0.01), r5.scenarios[0].CbillAbsorb);
 const r5f = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: p5 });
 ok('年度模式分摊年化≈全年加权（≠9.7）', Math.abs(r5f.scenarios[0].CbillAbsorb - 9.7) > 30, r5f.scenarios[0].CbillAbsorb);
+/* 5b. 分摊只算联动部分：billLinkRatio=10% → CbillAbsorb = 9.7×0.1 */
+const r5l = Calc.computeQuote({ q: qUni, keys, W: 372, wLt: 372, K: 1, params: p5, window: { from: '09-01', to: '12-31' }, billLinkRatio: 0.1 });
+ok('分摊只算联动部分：billLinkRatio=10% → CbillAbsorb=0.97', near(r5l.scenarios[0].CbillAbsorb, 0.97, 0.01), r5l.scenarios[0].CbillAbsorb);
 
 /* 6. 窗口为空 → 报错 */
 console.log('\n[5] 异常');

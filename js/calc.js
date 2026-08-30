@@ -256,6 +256,9 @@
     const { q, W, wLt, params } = args;
     const K = args.K != null ? args.K : 1;
     const keys = args.keys;
+    // 2026-08-30 分摊口径：只算进可联动部分 → billLinkRatio = 联动电量占比（app 由零售联动配置算出）
+    // 缺省 1 = 引擎层旧口径（全电量），产品路径（app.js）始终显式传入
+    const billLinkRatio = args.billLinkRatio != null ? Math.max(Number(args.billLinkRatio) || 0, 0) : 1;
     if (!Array.isArray(q) || !Array.isArray(keys) || q.length !== params.meta.hours || keys.length !== params.meta.hours) {
       throw new Error('客户曲线点数与参数年度小时数不一致');
     }
@@ -334,12 +337,13 @@
     const Clt = proc.totalCost / Q;                       // 中长期成本（窗口内，各情景相同）
     const Ebase = b.map((_, t) => proc.gapMwh * gNorm[t]); // 基准日前暴露曲线 E_base,t = E×g_t
 
-    // 到户层「预测度电分摊」：售电公司承担（absorb）→ 计入全成本；客户承担（pass）→ 转嫁不计入
+    // 到户层「预测度电分摊」：2026-08-30 口径——只算进可联动部分（CbillAbsorb = 年化分摊 × 联动占比，
+    // 联动电量代付），收入侧 retail.js 同口径向用户收取（代收），两者轧平、固定平段价不含分摊。
     // 窗口化：qW 窗口外=0 → 年化只按窗口内月份电量加权
     let billAbsorb = 0;
     const bl = params.billLayer;
     if (bl && bl.item && bl.item.bearer !== 'pass' && Array.isArray(bl.item.monthly)) {
-      billAbsorb = annualizeMonthly(bl.item.monthly, qW, keys).annual;
+      billAbsorb = annualizeMonthly(bl.item.monthly, qW, keys).annual * billLinkRatio;
     }
 
     const scenarios = params.scenarios.map(s => {

@@ -1,4 +1,5 @@
-/* 零售侧收入引擎自测：PPT 算例（公式精确值 55.80 万；PPT 分项舍入和 55.70）+ 边界用例
+/* 零售侧收入引擎自测：PPT 算例 + 边界用例
+ * 2026-08-30 起两处口径：峰谷平衡基准=372.14（年度双边协商成交均价，弃用463）；分摊只算进联动部分
  * 运行：node test/retail-test.js
  */
 'use strict';
@@ -15,17 +16,17 @@ ok('固定电费 = 44.6472 万（200×0.9×520×1.7 + 500×0.9×520 + 300×0.9×
 ok('联动电费 = 5.1516 万（方式③10%@540）', near(r.energy.linked.total, 51516, 1));
 ok('煤电电费 = 2.5758 万（trunc(106/100)=1）', near(r.energy.coal.total, 25758, 1));
 ok('浮动费用 = 0（2026 新规禁用）', !r.energy.floatFee, '浮动费应不存在');
-ok('峰谷平衡补贴 8.6118 万', near(r.peakValley.valleySubsidy, 86118, 1));
-ok('峰谷平衡惩罚 6.482 万', near(r.peakValley.peakPenalty, 64820, 1));
-ok('峰谷平衡净额 = +2.1298 万', near(r.peakValley.net, 21298, 1));
+ok('峰谷平衡补贴 6.9218 万（300×372.14×0.62）', near(r.peakValley.valleySubsidy, 69218.04, 1), r.peakValley.valleySubsidy);
+ok('峰谷平衡惩罚 5.21 万（200×372.14×0.7）', near(r.peakValley.peakPenalty, 52099.6, 1), r.peakValley.peakPenalty);
+ok('峰谷平衡净额 = +1.7118 万', near(r.peakValley.net, 17118.44, 1), r.peakValley.net);
 ok('绿电已完全删除（恒 0）', r.green.total === 0);
-ok('★ 零售收入 = 54.5044 万（2026 规则：去浮动费+删绿电）', near(r.grandTotal, 545044, 2), (r.grandTotal / 10000).toFixed(4));
-ok('度电单价 = 0.5450 元/kWh', near(r.unitPriceYuanPerKwh, 0.54504, 1e-5));
+ok('★ 零售收入 = 54.0864 万（372.14 基准）', near(r.grandTotal, 540864.44, 2), (r.grandTotal / 10000).toFixed(4));
+ok('度电单价 = 0.5409 元/kWh', near(r.unitPriceYuanPerKwh, 0.54086, 1e-5));
 ok('无校验错误', r.errors.length === 0, JSON.stringify(r.errors));
 
 console.log('\n[2] 盈亏平衡求解');
-// 成本 558044 元 → 盈亏平衡固定平段价应 = 520（收入=成本）
-const be = R.solveBreakEven(R.demoInput(), R.demoUsage(), 545044 / 1000);
+// 成本 540864.44 元 → 盈亏平衡固定平段价应 = 520（收入=成本）
+const be = R.solveBreakEven(R.demoInput(), R.demoUsage(), 540864.44 / 1000);
 ok('成本=收入时 盈亏平衡平段价=520', near(be.flatPrice, 520, 0.01), be.flatPrice);
 ok('代回利润=0', Math.abs(be.checkProfit) < 1, be.checkProfit);
 ok('K = (200×1.7+500+300×0.38)/1000 = 0.954', near(be.K, 0.954, 1e-9));
@@ -96,7 +97,7 @@ ok('非深圳商业（f1=f2=1）峰谷平衡净额=0', near(rb1.peakValley.net, 
 const bG = JSON.parse(JSON.stringify(R.demoInput()));
 bG.green = { enabled: true, actualGreenUsage: 100, volumeMode: 'ratio', ratio: 1, fixedRatio: 1, fixedPrice: 10, linkRatio: 0 };
 const rbG = R.calcRetail(bG, R.demoUsage());
-ok('绿电 enabled=true 也不产生收入（模块已删）', rbG.green.total === 0 && near(rbG.grandTotal, 545044, 2));
+ok('绿电 enabled=true 也不产生收入（模块已删）', rbG.green.total === 0 && near(rbG.grandTotal, 540864.44, 2));
 // CECI 负价差 trunc：结算 700 − 签约 834 = −134/100 = −1.34 → trunc = −1
 const b5 = JSON.parse(JSON.stringify(R.demoInput())); b5.coal.ceciSettle = 700;
 const rb5 = R.calcRetail(b5, R.demoUsage());
@@ -104,6 +105,26 @@ ok('CECI 负价差 trunc(−1.34) = −1 → 煤电电费为负', near(rb5.energ
 // 峰多谷少 → 峰谷平衡净额为负（惩罚重）
 const rb6 = R.calcRetail(R.demoInput(), { peak: 500, flat: 300, valley: 200 });
 ok('峰500/谷200 → 净额为负', rb6.peakValley.net < 0, rb6.peakValley.net);
+
+console.log('\n[5] 分摊·联动部分（2026-08-30 口径：只算进联动部分，不直接加）');
+const bi = JSON.parse(JSON.stringify(R.demoInput()));
+bi.billLayer = { monthly: new Array(12).fill(9.7) };
+const muU = new Array(12).fill(1000 / 12);
+const rbi = R.calcRetail(bi, R.demoUsage(), muU);
+ok('分摊·联动部分 = 1000MWh × 10% × 9.7 = 970 元（联动电量×月分摊）', near(rbi.bill.total, 970, 0.01), rbi.bill.total);
+ok('grandTotal 含联动分摊（+970）', near(rbi.grandTotal, 540864.44 + 970, 1), (rbi.grandTotal / 10000).toFixed(4));
+ok('收入构成单列 bill.linkRatio=10%', near(rbi.bill.linkRatio, 0.1, 1e-9));
+// 盈亏平衡：分摊代收代付（成本与收入同增 970 元）→ P平 不变（不进固定平段价）
+const beNoBill = R.solveBreakEven(R.demoInput(), R.demoUsage(), 540864.44 / 1000);
+const beBill = R.solveBreakEven(bi, R.demoUsage(), (540864.44 + 970) / 1000);
+ok('成本+收入同含联动分摊 → P平 仍=520（代收代付轧平）', near(beBill.flatPrice, 520, 0.01) && near(beNoBill.flatPrice, 520, 0.01), beBill.flatPrice);
+// 联动占比 0 → 分摊不计入收入
+const bi0 = JSON.parse(JSON.stringify(R.demoInput()));
+bi0.billLayer = { monthly: new Array(12).fill(9.7) };
+bi0.link.modes = []; bi0.fixed.ratio = 1;
+const rbi0 = R.calcRetail(bi0, R.demoUsage(), muU);
+ok('联动占比 0 → 分摊不计入（bill.total=0）', near(rbi0.bill.total, 0, 1e-9), rbi0.bill.total);
+ok('billLayer 缺省 → 无分摊收入（bill.total=0）', R.calcRetail(R.demoInput(), R.demoUsage(), muU).bill.total === 0);
 
 console.log('\n========================================');
 console.log('通过 ' + passed + ' / ' + (passed + failed));
